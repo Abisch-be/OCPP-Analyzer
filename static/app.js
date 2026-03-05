@@ -823,12 +823,40 @@ function renderAnalysis(container, text, streaming) {
 
     const cursor = streaming ? '<span class="streaming-indicator"></span>' : '';
     container.innerHTML = `<div class="analysis-content">${html}${cursor}</div>`;
+
+    if (!streaming) highlightRecommendations(container);
   } catch {
     container.innerHTML = `<div class="analysis-content"><pre>${escapeHtml(text)}</pre></div>`;
   }
 
   // Auto-scroll to bottom during streaming
   if (streaming) container.scrollTop = container.scrollHeight;
+}
+
+function highlightRecommendations(container) {
+  const content = container.querySelector('.analysis-content');
+  if (!content) return;
+
+  const RECO_KEYWORDS = ['lösung', 'priorität', 'empfehlung', 'best practice', 'maßnahme', 'nächste schritte'];
+  const nodes = Array.from(content.childNodes);
+  let wrapper = null;
+
+  for (const node of nodes) {
+    const isHeading = node.nodeType === Node.ELEMENT_NODE && /^H[23]$/.test(node.tagName);
+
+    if (isHeading) {
+      const isReco = RECO_KEYWORDS.some(k => node.textContent.toLowerCase().includes(k));
+      if (isReco) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'recommendation-highlight';
+        content.insertBefore(wrapper, node);
+      } else {
+        wrapper = null;
+      }
+    }
+
+    if (wrapper) wrapper.appendChild(node);
+  }
 }
 
 // ============================================================

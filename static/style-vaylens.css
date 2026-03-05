@@ -588,6 +588,22 @@ select.filter-input { width: 170px; cursor: pointer; }
 .streaming-indicator { display: inline-block; width: 8px; height: 16px; background: var(--primary); border-radius: 2px; animation: blink 0.7s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
 @keyframes blink { 50% { opacity: 0; } }
 
+.recommendation-highlight {
+  background: rgba(26, 158, 110, 0.06);
+  border: 1px solid rgba(26, 158, 110, 0.25);
+  border-left: 4px solid var(--result);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin: 14px 0 6px;
+}
+.recommendation-highlight h2,
+.recommendation-highlight h3 {
+  color: var(--result);
+  margin-top: 0;
+}
+.recommendation-highlight li { line-height: 1.7; }
+.recommendation-highlight strong { color: var(--result); }
+
 .analyzing-spinner { display: flex; align-items: center; gap: 10px; padding: 20px; color: var(--text-muted); }
 .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
