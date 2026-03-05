@@ -346,6 +346,15 @@ function formatTime(ts) {
   return tm ? tm[1] : ts;
 }
 
+function tsHtml(ts) {
+  if (!ts) return '';
+  const m = ts.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2})/);
+  const date = m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+  const time = m ? m[4] : (ts.match(/T(\d{2}:\d{2}:\d{2})/) || [])[1] || ts;
+  const dateSpan = date ? `<span class="pair-ts-date">${escapeHtml(date)}</span>` : '';
+  return `<span class="pair-ts" title="${escapeHtml(ts)}">${dateSpan}<span class="pair-ts-time">${escapeHtml(time)}</span></span>`;
+}
+
 // OCPP 1.6: actions always initiated by the Charging Station → Backend
 const CS_INITIATED = new Set([
   'Authorize', 'BootNotification', 'DiagnosticsStatusNotification',
@@ -422,8 +431,8 @@ function buildPairCard(pair) {
         <span class="pair-row-arrow">↑</span>
         <span class="pair-row-type">CALL</span>
         ${dirBadge}
-        <span class="pair-ts" title="${escapeHtml(call.timestamp || '')}">${formatTime(call.timestamp)}</span>
         <span class="pair-action-name" title="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</span>
+        ${tsHtml(call.timestamp)}
       </div>
       ${payloadHtml}
     </div>`;
@@ -453,7 +462,7 @@ function buildPairCard(pair) {
         <span class="pair-row-arrow">↓</span>
         <span class="pair-row-type">${typeLabel}</span>
         ${dirBadge}
-        <span class="pair-ts" title="${escapeHtml(response.timestamp || '')}">${formatTime(response.timestamp)}</span>
+        ${tsHtml(response.timestamp)}
       </div>
       ${payloadHtml}
     </div>`;
