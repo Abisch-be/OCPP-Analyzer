@@ -574,8 +574,8 @@ function buildPairCard(pair) {
         <span class="pair-row-arrow">↑</span>
         <span class="pair-row-type">CALL</span>
         ${dirBadge}
-        <span class="pair-action-name${OCPP_DESCRIPTIONS[call.action] ? ' has-ocpp-desc' : ''}" data-ocpp-action="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</span>
       </div>
+      <div class="pair-action-name${OCPP_DESCRIPTIONS[call.action] ? ' has-ocpp-desc' : ''}" data-ocpp-action="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</div>
       ${payloadHtml}
     </div>`;
   }

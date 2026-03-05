@@ -483,7 +483,7 @@ body {
 .pair-response .pair-row-type { background: var(--result-bg); color: var(--result); }
 .pair-error .pair-row-type { background: var(--callerror-bg); color: var(--callerror); }
 
-.pair-action-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pair-action-name { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin: 4px 0 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pair-ts { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; flex-shrink: 0; }
 .pair-ts-date, .pair-ts-time { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--text); background: var(--active-bg); padding: 1px 7px; border-radius: 4px; }
 .pair-row pre { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); white-space: pre-wrap; word-break: break-all; line-height: 1.5; max-height: 180px; overflow-y: auto; margin: 0; }
