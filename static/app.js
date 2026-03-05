@@ -844,7 +844,7 @@ function startLoadingTimer(container, messages) {
         <span class="loading-msg">${messages[0]}</span>
         <span class="loading-timer">0s</span>
       </div>
-      <div class="loading-hint">Das KI-Modell arbeitet lokal – dies kann bis zu 1 Minute dauern</div>
+      <div class="loading-hint">🧑‍💻 Patricks Kollege schaut sich das Schlamassel an – gleich gibt's Bescheid…</div>
     </div>`;
 
   const msgEl    = container.querySelector('.loading-msg');
