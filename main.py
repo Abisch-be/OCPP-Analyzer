@@ -380,6 +380,11 @@ async def theme_glass(_: Annotated[str, Depends(authenticate)]):
     return FileResponse("static/index-glass.html")
 
 
+@app.get("/vaylens")
+async def theme_vaylens(_: Annotated[str, Depends(authenticate)]):
+    return FileResponse("static/index-vaylens.html")
+
+
 @app.post("/api/parse")
 async def parse_logs(request: ParseRequest, _: Annotated[str, Depends(authenticate)]):
     try:
