@@ -832,10 +832,32 @@ function renderAnalysis(container, text, streaming) {
 }
 
 // ============================================================
+// eMobility Facts – rotieren im Lade-Hint
+// ============================================================
+const EMOBILITY_FACTS = [
+  '⚡ OCPP steht für Open Charge Point Protocol – der offene Standard, der Ladestationen und Backends verbindet.',
+  '🌍 Weltweit gibt es über 10 Millionen öffentliche Ladepunkte – Tendenz stark steigend.',
+  '🔋 Ein typisches E-Auto-Akku hat 60–100 kWh – genug Energie für eine Woche Heimstrom.',
+  '📡 OCPP 1.6 nutzt WebSockets – die Verbindung bleibt dauerhaft offen, kein Polling nötig.',
+  '🚗 Das erste Serienauto mit Schnellladefunktion war der Nissan Leaf (2010) – mit sagenhaften 50 kW.',
+  '🏎️ Formel-E-Autos laden zwischen den Rennen nicht – sie wechseln einfach das ganze Auto.',
+  '🔌 CHAdeMO, CCS, Type 2 – Europa hat sich auf CCS als Standard geeinigt. Endlich.',
+  '📊 Heartbeat-Intervall in OCPP 1.6: standardmäßig alle 4 Minuten – damit das Backend weiß, dass die Ladestation noch lebt.',
+  '💡 V2G (Vehicle-to-Grid) erlaubt es, Energie vom Auto zurück ins Netz zu speisen – dein Auto als Kraftwerk.',
+  '🧲 Induktives Laden für E-Autos gibt es schon – bis 22 kW, einfach drüberfahren und laden.',
+  '🌡️ Kälte reduziert die Reichweite von E-Autos um bis zu 30 % – Akkus mögen es kuschelig warm.',
+  '🏗️ OCPP 2.0.1 bringt ISO 15118 Plug & Charge: das Auto authentifiziert sich selbst – kein Ladekarte nötig.',
+  '⚖️ Eine Kilowattstunde Ladestrom kostet an öffentlichen Säulen im Schnitt 3–5x mehr als zu Hause.',
+  '🔄 Der BootNotification-Handshake ist immer die erste Nachricht nach dem Einschalten – wie ein Händedruck.',
+  '🚀 Ultraschnellader mit 350 kW können einen Akku in unter 15 Minuten auf 80 % laden.',
+];
+
+// ============================================================
 // Loading Timer – zeigt Sekundenanzahl + rotierende Statusmeldungen
 // ============================================================
 function startLoadingTimer(container, messages) {
   let seconds = 0;
+  const factIdx0 = Math.floor(Math.random() * EMOBILITY_FACTS.length);
 
   container.innerHTML = `
     <div class="loading-state">
@@ -844,12 +866,14 @@ function startLoadingTimer(container, messages) {
         <span class="loading-msg">${messages[0]}</span>
         <span class="loading-timer">0s</span>
       </div>
-      <div class="loading-hint">🧑‍💻 Patricks Kollege schaut sich das Schlamassel an – gleich gibt's Bescheid…</div>
+      <div class="loading-hint">${EMOBILITY_FACTS[factIdx0]}</div>
     </div>`;
 
   const msgEl    = container.querySelector('.loading-msg');
   const timerEl  = container.querySelector('.loading-timer');
-  let msgIdx = 0;
+  const hintEl   = container.querySelector('.loading-hint');
+  let msgIdx  = 0;
+  let factIdx = factIdx0;
 
   const interval = setInterval(() => {
     seconds++;
@@ -857,6 +881,10 @@ function startLoadingTimer(container, messages) {
     if (seconds % 8 === 0 && messages.length > 1) {
       msgIdx = (msgIdx + 1) % messages.length;
       msgEl.textContent = messages[msgIdx];
+    }
+    if (seconds % 10 === 0) {
+      factIdx = (factIdx + 1) % EMOBILITY_FACTS.length;
+      hintEl.textContent = EMOBILITY_FACTS[factIdx];
     }
   }, 1000);
 
