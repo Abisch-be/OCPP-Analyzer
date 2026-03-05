@@ -12,6 +12,7 @@ let emailDraftText         = '';
 let analysisDone           = false;
 let explanationDone        = false;
 let timelineChartInstance  = null;
+let lastParsedContent      = '';
 
 // --- DOM References ---
 const logInput        = document.getElementById('logInput');
@@ -66,9 +67,19 @@ function saveSettings() {
 // Event Listeners
 // ============================================================
 function setupEventListeners() {
-  logInput.addEventListener('input', updateCharCount);
+  logInput.addEventListener('input', () => {
+    updateCharCount();
+    if (parsedData !== null) markResultsDirty();
+  });
 
-  parseBtn.addEventListener('click', parseLogs);
+  parseBtn.addEventListener('click', async () => {
+    if (parsedData !== null && logInput.value.trim() === lastParsedContent) {
+      switchTab('messages');
+      return;
+    }
+    await parseLogs();
+    switchTab('messages');
+  });
   analyzeBtn.addEventListener('click', analyzeLogs);
   draftEmailBtn.addEventListener('click', draftEmail);
   exampleBtn.addEventListener('click', loadExample);
@@ -120,6 +131,7 @@ function handleFileUpload(file) {
   reader.onload = (e) => {
     logInput.value = e.target.result;
     updateCharCount();
+    if (parsedData !== null) markResultsDirty();
     showToast(`📂 Datei geladen: ${file.name}`, 'success');
   };
   reader.onerror = () => showToast('Fehler beim Lesen der Datei', 'error');
@@ -212,11 +224,11 @@ async function parseLogs() {
     }
 
     parsedData = await response.json();
+    lastParsedContent = content;
 
     updateStats(parsedData.stats);
     displayMessages(parsedData.messages);
     displayIssues(parsedData.errors, parsedData.warnings);
-    switchTab('messages');
 
     const total = parsedData.stats.total;
     const issues = parsedData.stats.errors + parsedData.stats.warnings;
@@ -673,6 +685,8 @@ function jumpToLine(line) {
 // AI Analysis (Streaming)
 // ============================================================
 async function analyzeLogs() {
+  if (analysisDone) { switchTab('analysis'); return; }
+
   if (analyzeAbortController) {
     analyzeAbortController.abort();
   }
@@ -936,34 +950,19 @@ function clearLog() {
   logInput.value = '';
   if (customerContext) customerContext.value = '';
   updateCharCount();
-  parsedData = null;
-  allPairs   = [];
-
-  issuesBadge.classList.add('hidden');
-
-  document.getElementById('tab-messages').innerHTML = EMPTY_STATES.messages;
-  document.getElementById('tab-analysis').innerHTML = EMPTY_STATES.analysis;
-  document.getElementById('tab-issues').innerHTML   = EMPTY_STATES.issues;
-  document.getElementById('tab-email').innerHTML    = EMPTY_STATES.email;
-  emailDraftText = '';
-
-  analysisDone    = false;
-  explanationDone = false;
-  analyzeBtn.disabled    = false;
-  analyzeBtn.textContent = '🤖 KI-Analyse';
-  analyzeBtn.title       = '';
-  draftEmailBtn.disabled    = false;
-  draftEmailBtn.textContent = '💡 Einfache Erklärung';
-  draftEmailBtn.title       = '';
-
+  markResultsDirty();
   showToast('Log geleert', 'info');
 }
 
 // ============================================================
 // Reset Results (rechtes Panel leeren, Eingabe bleibt)
 // ============================================================
-function resetResults() {
-  parsedData = null;
+function markResultsDirty() {
+  parsedData      = null;
+  analysisDone    = false;
+  explanationDone = false;
+  lastParsedContent = '';
+  allPairs = [];
 
   issuesBadge.classList.add('hidden');
 
@@ -973,15 +972,18 @@ function resetResults() {
   document.getElementById('tab-email').innerHTML    = EMPTY_STATES.email;
   emailDraftText = '';
 
-  analysisDone    = false;
-  explanationDone = false;
+  if (timelineChartInstance) { timelineChartInstance.destroy(); timelineChartInstance = null; }
+
   analyzeBtn.disabled    = false;
   analyzeBtn.textContent = '🤖 KI-Analyse';
   analyzeBtn.title       = '';
   draftEmailBtn.disabled    = false;
   draftEmailBtn.textContent = '💡 Einfache Erklärung';
   draftEmailBtn.title       = '';
+}
 
+function resetResults() {
+  markResultsDirty();
   switchTab('messages');
   showToast('Ergebnisse zurückgesetzt', 'info');
 }
