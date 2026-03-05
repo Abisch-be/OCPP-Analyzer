@@ -362,6 +362,7 @@ body {
    ============================================================ */
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 10px 16px 14px;
@@ -369,6 +370,9 @@ body {
   border-top: 1px solid var(--border);
   background: var(--surface-2);
 }
+.actions #parseBtn       { flex: 1 1 100%; }
+.actions #analyzeBtn,
+.actions #explanationBtn { flex: 1 1 0; min-width: 0; }
 
 /* ============================================================
    Tabs
