@@ -82,22 +82,16 @@ body {
   gap: 14px;
 }
 
-.logo-wordmark {
-  display: flex;
-  align-items: center;
+.logo-ocpp {
+  color: #475EFF;
+  font-weight: 700;
+  font-size: 18px;
 }
 
-.logo-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-2);
-}
-
-.logo-product {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: -0.1px;
+.logo-analyzer {
+  color: #232325;
+  font-weight: 700;
+  font-size: 18px;
 }
 
 .header-tag {

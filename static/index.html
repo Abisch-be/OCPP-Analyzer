@@ -3,92 +3,81 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OCPP Log Analyzer</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <title>OCPP Log Analyzer · Vaylens</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/style-vaylens.css" />
   </head>
   <body>
-    <!-- Header -->
     <header class="header">
       <div class="header-logo">
-        <span class="logo-icon">⚡</span>
-        <span class="logo-text">OCPP Log Analyzer</span>
+        <span class="logo-ocpp">OCPP</span>
+        <span class="logo-analyzer">Analyzer</span>
+      </div>
+      <div class="header-right">
+        <span class="header-tag">OCPP 1.6 Diagnostic Tool</span>
       </div>
     </header>
 
-    <!-- Settings Panel -->
     <div id="settingsPanel" class="settings-panel hidden">
       <div class="settings-inner">
         <div class="settings-group">
           <label class="settings-label" for="ollamaUrl">Ollama URL</label>
-          <input
-            id="ollamaUrl"
-            type="text"
-            class="input"
-            placeholder="http://your-vps:11434"
-            value="http://localhost:11434"
-          />
+          <input id="ollamaUrl" type="text" class="input" placeholder="http://your-vps:11434" value="http://localhost:11434" />
         </div>
         <div class="settings-group">
-          <label class="settings-label" for="modelSelect">Modell</label>
+          <label class="settings-label" for="modelSelect">KI-Modell</label>
           <select id="modelSelect" class="select">
-            <option value="">-- Modelle laden --</option>
+            <option value="">— Modelle laden —</option>
           </select>
         </div>
         <button id="loadModelsBtn" class="btn btn-secondary">
-          🔄 Modelle laden
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Modelle laden
         </button>
         <span id="modelsStatus" class="status-text"></span>
       </div>
     </div>
 
-    <!-- Main Grid -->
     <main class="main-grid">
-      <!-- Left Panel: Log Input -->
+      <!-- Left Panel -->
       <div class="panel left-panel">
-        <!-- Toolbar -->
-        <div class="input-toolbar">
-          <span class="toolbar-title">OCPP Log</span>
-          <label class="btn-tool" for="fileInput" title="Datei wählen"
-            >📂</label
-          >
-          <input
-            id="fileInput"
-            type="file"
-            class="file-input-hidden"
-            accept=".log,.txt,.json"
-          />
-          <button id="exampleBtn" class="btn-tool" title="Beispiel laden">
-            📋
-          </button>
-          <button id="settingsToggle" class="btn-tool" title="KI-Einstellungen">
-            ⚙️
-          </button>
-          <button
-            id="clearBtn"
-            class="btn-tool btn-tool-danger"
-            title="Log leeren"
-          >
-            🗑️
-          </button>
+        <div class="panel-section-header">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Log Eingabe
+          <div class="toolbar-actions">
+            <label class="btn-icon" for="fileInput" title="Datei öffnen">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </label>
+            <input id="fileInput" type="file" class="file-input-hidden" accept=".log,.txt,.json" />
+            <button id="exampleBtn" class="btn-icon" title="Beispiel laden">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </button>
+            <button id="settingsToggle" class="btn-icon" title="KI-Einstellungen">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+            <button id="clearBtn" class="btn-icon btn-icon-danger" title="Log leeren">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
         </div>
 
-        <!-- Kundenkontext -->
         <div class="context-section">
-          <label class="context-label"
-            >🗣️ Kundenkontext
-            <span class="context-hint">(optional)</span></label
-          >
+          <label class="context-label">
+            Kundenkontext
+            <span class="context-hint">optional</span>
+          </label>
           <textarea
             id="customerContext"
             class="context-textarea"
-            rows="4"
+            rows="3"
             maxlength="500"
-            placeholder="Gemeldetes Problem beschreiben, z.B.:&#10;• Kunde meldet Ladeabbrüche nach ca. 5 Minuten&#10;• Keine Ladeleistung trotz Verbindung&#10;• Fehler beim Ladestart mit RFID-Karte"
+            placeholder="Gemeldetes Problem beschreiben, z.B. Ladeabbrüche nach 5 Min, kein Ladestart mit RFID..."
             spellcheck="true"
           ></textarea>
         </div>
 
-        <!-- Textarea -->
         <textarea
           id="logInput"
           class="log-textarea"
@@ -96,78 +85,91 @@
           spellcheck="false"
         ></textarea>
 
-        <!-- Char Count -->
         <div class="char-count">
           <span id="charCount">0</span> Zeichen
-          <span class="sep">|</span>
+          <span class="sep">·</span>
           <span id="lineCount">0</span> Zeilen
         </div>
 
-        <!-- Actions -->
         <div class="actions">
-          <button id="parseBtn" class="btn btn-primary">🔍 Parsen</button>
-          <button id="analyzeBtn" class="btn btn-accent">🤖 KI-Analyse</button>
-          <button id="draftEmailBtn" class="btn btn-secondary">
-            💡 Einfache Erklärung
+          <button id="parseBtn" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Parsen
+          </button>
+          <button id="analyzeBtn" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4l2 2"/><path d="M18 2l3 3-3 3"/><path d="M21 2v3h-3"/></svg>
+            KI-Analyse
+          </button>
+          <button id="draftEmailBtn" class="btn btn-ghost">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Erklärung
           </button>
         </div>
       </div>
 
-      <!-- Right Panel: Results -->
+      <!-- Right Panel -->
       <div class="panel right-panel">
-        <!-- Tabs -->
         <div class="tabs">
           <button class="tab active" data-tab="issues">
-            🚨 Issues
+            Probleme
             <span id="issuesBadge" class="tab-badge hidden">0</span>
           </button>
-          <button class="tab" data-tab="messages">💬 Nachrichten</button>
-          <button class="tab" data-tab="analysis">
-            🔬 Detaillierte Analyse (KI)
-          </button>
-          <button class="tab" data-tab="email">💡 Einfache Erklärung</button>
+          <button class="tab" data-tab="messages">Nachrichten</button>
+          <button class="tab" data-tab="analysis">KI-Analyse</button>
+          <button class="tab" data-tab="email">Erklärung</button>
         </div>
 
-        <!-- Tab: Issues -->
         <div id="tab-issues" class="tab-content active">
           <div class="empty-state">
-            <div class="empty-icon">✅</div>
-            <div>Keine Issues erkannt</div>
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <div class="empty-title">Keine Probleme erkannt</div>
+            <div class="empty-sub">Füge ein OCPP Log ein und klicke „Parsen"</div>
           </div>
         </div>
-
-        <!-- Tab: Messages -->
         <div id="tab-messages" class="tab-content hidden">
           <div class="empty-state">
-            <div class="empty-icon">📭</div>
-            <div>Log parsen um Nachrichten anzuzeigen</div>
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div class="empty-title">Keine Nachrichten</div>
+            <div class="empty-sub">Log parsen um OCPP-Nachrichten anzuzeigen</div>
           </div>
         </div>
-
-        <!-- Tab: AI Analysis -->
         <div id="tab-analysis" class="tab-content hidden">
           <div class="empty-state">
-            <div class="empty-icon">🔬</div>
-            <div>
-              „🤖 KI-Analyse" klicken um eine detaillierte Analyse zu erhalten
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
             </div>
+            <div class="empty-title">Keine Analyse vorhanden</div>
+            <div class="empty-sub">„KI-Analyse" klicken um zu starten</div>
           </div>
         </div>
-
-        <!-- Tab: Simple Explanation -->
         <div id="tab-email" class="tab-content hidden">
           <div class="empty-state">
-            <div class="empty-icon">💡</div>
-            <div>
-              „💡 Einfache Erklärung" klicken um eine verständliche
-              Zusammenfassung zu erhalten
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
             </div>
+            <div class="empty-title">Keine Erklärung vorhanden</div>
+            <div class="empty-sub">„Erklärung" klicken um zu generieren</div>
           </div>
         </div>
       </div>
     </main>
 
-    <!-- Toast notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

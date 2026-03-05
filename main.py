@@ -365,26 +365,6 @@ async def root(_: Annotated[str, Depends(authenticate)]):
     return FileResponse("static/index.html")
 
 
-@app.get("/terminal")
-async def theme_terminal(_: Annotated[str, Depends(authenticate)]):
-    return FileResponse("static/index-terminal.html")
-
-
-@app.get("/light")
-async def theme_light(_: Annotated[str, Depends(authenticate)]):
-    return FileResponse("static/index-light.html")
-
-
-@app.get("/glass")
-async def theme_glass(_: Annotated[str, Depends(authenticate)]):
-    return FileResponse("static/index-glass.html")
-
-
-@app.get("/vaylens")
-async def theme_vaylens(_: Annotated[str, Depends(authenticate)]):
-    return FileResponse("static/index-vaylens.html")
-
-
 @app.post("/api/parse")
 async def parse_logs(request: ParseRequest, _: Annotated[str, Depends(authenticate)]):
     try:

@@ -864,12 +864,15 @@ function resetResults() {
 }
 
 // ============================================================
-// Load Example Log
+// Load Example Log (cycles through multiple examples)
 // ============================================================
+let exampleIndex = 0;
+
 function loadExample() {
-  logInput.value = EXAMPLE_LOG;
+  logInput.value = EXAMPLE_LOGS[exampleIndex % EXAMPLE_LOGS.length];
+  exampleIndex++;
   updateCharCount();
-  showToast('📋 Beispiel-Log geladen', 'info');
+  showToast(`📄 Beispiel ${exampleIndex} von ${EXAMPLE_LOGS.length} geladen`, 'info');
 }
 
 // ============================================================
@@ -896,9 +899,11 @@ function escapeHtml(str) {
 }
 
 // ============================================================
-// Example OCPP 1.6 Log
+// Example OCPP 1.6 Logs
 // ============================================================
-const EXAMPLE_LOG = `2024-01-15T10:00:00.000Z SEND [2,"msg-001","BootNotification",{"chargePointVendor":"EVBox","chargePointModel":"BusinessLine","chargePointSerialNumber":"EVB-P1234567","firmwareVersion":"3.0.1","iccid":"","imsi":"","meterType":"Inepro Metering","meterSerialNumber":"PRE12345678"}]
+
+// Example 1: Ground fault + invalid RFID + emergency stop
+const EXAMPLE_1 = `2024-01-15T10:00:00.000Z SEND [2,"msg-001","BootNotification",{"chargePointVendor":"EVBox","chargePointModel":"BusinessLine","chargePointSerialNumber":"EVB-P1234567","firmwareVersion":"3.0.1","iccid":"","imsi":"","meterType":"Inepro Metering","meterSerialNumber":"PRE12345678"}]
 2024-01-15T10:00:00.521Z RECV [3,"msg-001",{"currentTime":"2024-01-15T10:00:00Z","interval":300,"status":"Accepted"}]
 2024-01-15T10:00:01.100Z SEND [2,"msg-002","StatusNotification",{"connectorId":0,"errorCode":"NoError","status":"Available"}]
 2024-01-15T10:00:01.234Z RECV [3,"msg-002",{}]
@@ -933,3 +938,70 @@ const EXAMPLE_LOG = `2024-01-15T10:00:00.000Z SEND [2,"msg-001","BootNotificatio
 2024-01-15T10:30:00.000Z SEND [2,"msg-017","Heartbeat",{}]
 2024-01-15T10:30:00.112Z RECV [3,"msg-017",{"currentTime":"2024-01-15T10:30:00Z"}]
 2024-01-15T10:35:00.000Z SEND [2,"msg-018","RemoteStartTransaction",{"connectorId":1,"idTag":"RFID-XYZ"}]`;
+
+// Example 2: Normal successful charge session (clean flow, no errors)
+const EXAMPLE_2 = `2024-03-10T08:00:00.000Z SEND [2,"s-001","BootNotification",{"chargePointVendor":"Alpitronic","chargePointModel":"Hypercharger100","chargePointSerialNumber":"ALP-HC-00423","firmwareVersion":"1.9.4","meterType":"MID","meterSerialNumber":"MID-8823441"}]
+2024-03-10T08:00:00.312Z RECV [3,"s-001",{"currentTime":"2024-03-10T08:00:00Z","interval":60,"status":"Accepted"}]
+2024-03-10T08:00:01.000Z SEND [2,"s-002","StatusNotification",{"connectorId":0,"errorCode":"NoError","status":"Available"}]
+2024-03-10T08:00:01.120Z RECV [3,"s-002",{}]
+2024-03-10T08:00:01.200Z SEND [2,"s-003","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Available"}]
+2024-03-10T08:00:01.310Z RECV [3,"s-003",{}]
+2024-03-10T08:01:00.000Z SEND [2,"s-004","Heartbeat",{}]
+2024-03-10T08:01:00.090Z RECV [3,"s-004",{"currentTime":"2024-03-10T08:01:00Z"}]
+2024-03-10T08:05:22.000Z SEND [2,"s-005","Authorize",{"idTag":"RFID-4A2F9C"}]
+2024-03-10T08:05:22.188Z RECV [3,"s-005",{"idTagInfo":{"status":"Accepted","expiryDate":"2025-12-31T23:59:59Z","parentIdTag":"GROUP-FLEET-01"}}]
+2024-03-10T08:05:22.300Z SEND [2,"s-006","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Preparing"}]
+2024-03-10T08:05:22.420Z RECV [3,"s-006",{}]
+2024-03-10T08:05:23.000Z SEND [2,"s-007","StartTransaction",{"connectorId":1,"idTag":"RFID-4A2F9C","meterStart":12450,"timestamp":"2024-03-10T08:05:23Z","reservationId":0}]
+2024-03-10T08:05:23.245Z RECV [3,"s-007",{"transactionId":10042,"idTagInfo":{"status":"Accepted"}}]
+2024-03-10T08:05:23.400Z SEND [2,"s-008","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Charging"}]
+2024-03-10T08:05:23.510Z RECV [3,"s-008",{}]
+2024-03-10T08:10:23.000Z SEND [2,"s-009","MeterValues",{"connectorId":1,"transactionId":10042,"meterValue":[{"timestamp":"2024-03-10T08:10:23Z","sampledValue":[{"value":"22000","measurand":"Power.Active.Import","unit":"W"},{"value":"12452.833","measurand":"Energy.Active.Import.Register","unit":"kWh"}]}]}]
+2024-03-10T08:10:23.155Z RECV [3,"s-009",{}]
+2024-03-10T08:15:23.000Z SEND [2,"s-010","MeterValues",{"connectorId":1,"transactionId":10042,"meterValue":[{"timestamp":"2024-03-10T08:15:23Z","sampledValue":[{"value":"21800","measurand":"Power.Active.Import","unit":"W"},{"value":"14284.500","measurand":"Energy.Active.Import.Register","unit":"kWh"}]}]}]
+2024-03-10T08:15:23.140Z RECV [3,"s-010",{}]
+2024-03-10T08:20:23.000Z SEND [2,"s-011","MeterValues",{"connectorId":1,"transactionId":10042,"meterValue":[{"timestamp":"2024-03-10T08:20:23Z","sampledValue":[{"value":"18500","measurand":"Power.Active.Import","unit":"W"},{"value":"16100.750","measurand":"Energy.Active.Import.Register","unit":"kWh"}]}]}]
+2024-03-10T08:20:23.162Z RECV [3,"s-011",{}]
+2024-03-10T08:25:10.000Z SEND [2,"s-012","StopTransaction",{"transactionId":10042,"meterStop":17650,"timestamp":"2024-03-10T08:25:10Z","reason":"Local","idTag":"RFID-4A2F9C"}]
+2024-03-10T08:25:10.290Z RECV [3,"s-012",{"idTagInfo":{"status":"Accepted"}}]
+2024-03-10T08:25:11.000Z SEND [2,"s-013","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Finishing"}]
+2024-03-10T08:25:11.120Z RECV [3,"s-013",{}]
+2024-03-10T08:25:15.000Z SEND [2,"s-014","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Available"}]
+2024-03-10T08:25:15.110Z RECV [3,"s-014",{}]
+2024-03-10T08:26:00.000Z SEND [2,"s-015","Heartbeat",{}]
+2024-03-10T08:26:00.085Z RECV [3,"s-015",{"currentTime":"2024-03-10T08:26:00Z"}]`;
+
+// Example 3: Connection timeout / heartbeat failure – station goes offline mid-session
+const EXAMPLE_3 = `2024-06-20T14:00:00.000Z SEND [2,"t-001","BootNotification",{"chargePointVendor":"Wallbox","chargePointModel":"Commander2","chargePointSerialNumber":"WB-CMD2-88512","firmwareVersion":"5.7.12","meterType":"MID","meterSerialNumber":"WB-MID-55312"}]
+2024-06-20T14:00:00.290Z RECV [3,"t-001",{"currentTime":"2024-06-20T14:00:00Z","interval":30,"status":"Accepted"}]
+2024-06-20T14:00:01.000Z SEND [2,"t-002","StatusNotification",{"connectorId":0,"errorCode":"NoError","status":"Available"}]
+2024-06-20T14:00:01.110Z RECV [3,"t-002",{}]
+2024-06-20T14:00:01.200Z SEND [2,"t-003","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Available"}]
+2024-06-20T14:00:01.320Z RECV [3,"t-003",{}]
+2024-06-20T14:00:30.000Z SEND [2,"t-004","Heartbeat",{}]
+2024-06-20T14:00:30.095Z RECV [3,"t-004",{"currentTime":"2024-06-20T14:00:30Z"}]
+2024-06-20T14:02:15.000Z SEND [2,"t-005","Authorize",{"idTag":"RFID-9B3D1E"}]
+2024-06-20T14:02:15.210Z RECV [3,"t-005",{"idTagInfo":{"status":"Accepted"}}]
+2024-06-20T14:02:15.400Z SEND [2,"t-006","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Preparing"}]
+2024-06-20T14:02:15.520Z RECV [3,"t-006",{}]
+2024-06-20T14:02:16.000Z SEND [2,"t-007","StartTransaction",{"connectorId":1,"idTag":"RFID-9B3D1E","meterStart":5800,"timestamp":"2024-06-20T14:02:16Z"}]
+2024-06-20T14:02:16.315Z RECV [3,"t-007",{"transactionId":20317,"idTagInfo":{"status":"Accepted"}}]
+2024-06-20T14:02:16.500Z SEND [2,"t-008","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Charging"}]
+2024-06-20T14:02:16.615Z RECV [3,"t-008",{}]
+2024-06-20T14:03:00.000Z SEND [2,"t-009","Heartbeat",{}]
+2024-06-20T14:03:00.088Z RECV [3,"t-009",{"currentTime":"2024-06-20T14:03:00Z"}]
+2024-06-20T14:07:16.000Z SEND [2,"t-010","MeterValues",{"connectorId":1,"transactionId":20317,"meterValue":[{"timestamp":"2024-06-20T14:07:16Z","sampledValue":[{"value":"11000","measurand":"Power.Active.Import","unit":"W"},{"value":"5800.917","measurand":"Energy.Active.Import.Register","unit":"kWh"}]}]}]
+2024-06-20T14:07:16.145Z RECV [3,"t-010",{}]
+2024-06-20T14:03:30.000Z SEND [2,"t-011","Heartbeat",{}]
+2024-06-20T14:04:00.000Z SEND [2,"t-012","Heartbeat",{}]
+2024-06-20T14:04:30.000Z SEND [2,"t-013","Heartbeat",{}]
+2024-06-20T14:05:00.000Z SEND [2,"t-014","Heartbeat",{}]
+2024-06-20T14:12:16.000Z SEND [2,"t-015","StopTransaction",{"transactionId":20317,"meterStop":6230,"timestamp":"2024-06-20T14:12:16Z","reason":"PowerLoss","idTag":"RFID-9B3D1E"}]
+2024-06-20T14:25:44.000Z SEND [2,"t-016","BootNotification",{"chargePointVendor":"Wallbox","chargePointModel":"Commander2","chargePointSerialNumber":"WB-CMD2-88512","firmwareVersion":"5.7.12","meterType":"MID","meterSerialNumber":"WB-MID-55312"}]
+2024-06-20T14:25:44.380Z RECV [3,"t-016",{"currentTime":"2024-06-20T14:25:44Z","interval":30,"status":"Accepted"}]
+2024-06-20T14:25:45.000Z SEND [2,"t-017","StatusNotification",{"connectorId":0,"errorCode":"NoError","status":"Available"}]
+2024-06-20T14:25:45.130Z RECV [3,"t-017",{}]
+2024-06-20T14:25:45.250Z SEND [2,"t-018","StatusNotification",{"connectorId":1,"errorCode":"NoError","status":"Available"}]
+2024-06-20T14:25:45.360Z RECV [3,"t-018",{}]`;
+
+const EXAMPLE_LOGS = [EXAMPLE_1, EXAMPLE_2, EXAMPLE_3];
