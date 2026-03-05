@@ -428,11 +428,11 @@ function buildPairCard(pair) {
     html += `<div class="pair-row pair-request">
       <div class="pair-row-meta">
         <span class="msg-line">L${call.line}</span>
+        ${tsHtml(call.timestamp)}
         <span class="pair-row-arrow">↑</span>
         <span class="pair-row-type">CALL</span>
         ${dirBadge}
         <span class="pair-action-name" title="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</span>
-        ${tsHtml(call.timestamp)}
       </div>
       ${payloadHtml}
     </div>`;
@@ -459,10 +459,10 @@ function buildPairCard(pair) {
     html += `<div class="pair-row ${rowClass}">
       <div class="pair-row-meta">
         <span class="msg-line">L${response.line}</span>
+        ${tsHtml(response.timestamp)}
         <span class="pair-row-arrow">↓</span>
         <span class="pair-row-type">${typeLabel}</span>
         ${dirBadge}
-        ${tsHtml(response.timestamp)}
       </div>
       ${payloadHtml}
     </div>`;

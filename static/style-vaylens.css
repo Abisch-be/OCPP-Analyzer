@@ -484,9 +484,8 @@ body {
 .pair-error .pair-row-type { background: var(--callerror-bg); color: var(--callerror); }
 
 .pair-action-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pair-ts { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; flex-shrink: 0; }
-.pair-ts-date { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
-.pair-ts-time { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--text); background: var(--active-bg); padding: 1px 7px; border-radius: 4px; }
+.pair-ts { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; flex-shrink: 0; }
+.pair-ts-date, .pair-ts-time { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--text); background: var(--active-bg); padding: 1px 7px; border-radius: 4px; }
 .pair-row pre { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); white-space: pre-wrap; word-break: break-all; line-height: 1.5; max-height: 180px; overflow-y: auto; margin: 0; }
 .pair-no-response { padding: 7px 12px; font-size: 12px; color: var(--warning); border-top: 1px solid var(--border); font-style: italic; }
 
