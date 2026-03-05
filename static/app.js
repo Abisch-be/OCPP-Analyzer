@@ -433,7 +433,7 @@ function buildPairCard(pair) {
   if (response) {
     const dirBadge = dirBadgeHtml(call?.action ?? response.action, true, response.direction);
     const rowClass  = response.type === 'CALLERROR' ? 'pair-error' : 'pair-response';
-    const typeLabel = response.type === 'CALLERROR' ? 'ERROR' : 'RES';
+    const typeLabel = response.type === 'CALLERROR' ? 'ERROR' : 'RESPONSE';
 
     let payloadStr;
     if (response.type === 'CALLERROR') {
