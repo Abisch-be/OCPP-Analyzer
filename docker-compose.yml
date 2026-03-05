@@ -1,0 +1,14 @@
+services:
+  ocpp-analyzer:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - ollama_net
+
+networks:
+  ollama_net:
+    external: true

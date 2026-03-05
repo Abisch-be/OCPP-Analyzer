@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OCPP Log Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <!-- Header -->
+    <header class="header">
+      <div class="header-logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">OCPP Log Analyzer</span>
+      </div>
+    </header>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-inner">
+        <div class="settings-group">
+          <label class="settings-label" for="ollamaUrl">Ollama URL</label>
+          <input
+            id="ollamaUrl"
+            type="text"
+            class="input"
+            placeholder="http://your-vps:11434"
+            value="http://localhost:11434"
+          />
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="modelSelect">Modell</label>
+          <select id="modelSelect" class="select">
+            <option value="">-- Modelle laden --</option>
+          </select>
+        </div>
+        <button id="loadModelsBtn" class="btn btn-secondary">
+          🔄 Modelle laden
+        </button>
+        <span id="modelsStatus" class="status-text"></span>
+      </div>
+    </div>
+
+    <!-- Main Grid -->
+    <main class="main-grid">
+      <!-- Left Panel: Log Input -->
+      <div class="panel left-panel">
+        <!-- Toolbar -->
+        <div class="input-toolbar">
+          <span class="toolbar-title">OCPP Log</span>
+          <label class="btn-tool" for="fileInput" title="Datei wählen"
+            >📂</label
+          >
+          <input
+            id="fileInput"
+            type="file"
+            class="file-input-hidden"
+            accept=".log,.txt,.json"
+          />
+          <button id="exampleBtn" class="btn-tool" title="Beispiel laden">
+            📋
+          </button>
+          <button id="settingsToggle" class="btn-tool" title="KI-Einstellungen">
+            ⚙️
+          </button>
+          <button
+            id="clearBtn"
+            class="btn-tool btn-tool-danger"
+            title="Log leeren"
+          >
+            🗑️
+          </button>
+        </div>
+
+        <!-- Kundenkontext -->
+        <div class="context-section">
+          <label class="context-label"
+            >🗣️ Kundenkontext
+            <span class="context-hint">(optional)</span></label
+          >
+          <textarea
+            id="customerContext"
+            class="context-textarea"
+            rows="4"
+            maxlength="500"
+            placeholder="Gemeldetes Problem beschreiben, z.B.:&#10;• Kunde meldet Ladeabbrüche nach ca. 5 Minuten&#10;• Keine Ladeleistung trotz Verbindung&#10;• Fehler beim Ladestart mit RFID-Karte"
+            spellcheck="true"
+          ></textarea>
+        </div>
+
+        <!-- Textarea -->
+        <textarea
+          id="logInput"
+          class="log-textarea"
+          placeholder='OCPP 1.6 Log hier einfügen oder Datei ablegen...&#10;&#10;Format: [2,"id","Action",{...}]'
+          spellcheck="false"
+        ></textarea>
+
+        <!-- Char Count -->
+        <div class="char-count">
+          <span id="charCount">0</span> Zeichen
+          <span class="sep">|</span>
+          <span id="lineCount">0</span> Zeilen
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+          <button id="parseBtn" class="btn btn-primary">🔍 Parsen</button>
+          <button id="analyzeBtn" class="btn btn-accent">🤖 KI-Analyse</button>
+          <button id="draftEmailBtn" class="btn btn-secondary">
+            💡 Einfache Erklärung
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Panel: Results -->
+      <div class="panel right-panel">
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" data-tab="issues">
+            🚨 Issues
+            <span id="issuesBadge" class="tab-badge hidden">0</span>
+          </button>
+          <button class="tab" data-tab="messages">💬 Nachrichten</button>
+          <button class="tab" data-tab="analysis">
+            🔬 Detaillierte Analyse (KI)
+          </button>
+          <button class="tab" data-tab="email">💡 Einfache Erklärung</button>
+        </div>
+
+        <!-- Tab: Issues -->
+        <div id="tab-issues" class="tab-content active">
+          <div class="empty-state">
+            <div class="empty-icon">✅</div>
+            <div>Keine Issues erkannt</div>
+          </div>
+        </div>
+
+        <!-- Tab: Messages -->
+        <div id="tab-messages" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <div>Log parsen um Nachrichten anzuzeigen</div>
+          </div>
+        </div>
+
+        <!-- Tab: AI Analysis -->
+        <div id="tab-analysis" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">🔬</div>
+            <div>
+              „🤖 KI-Analyse" klicken um eine detaillierte Analyse zu erhalten
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Simple Explanation -->
+        <div id="tab-email" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">💡</div>
+            <div>
+              „💡 Einfache Erklärung" klicken um eine verständliche
+              Zusammenfassung zu erhalten
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
