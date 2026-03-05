@@ -744,7 +744,13 @@ async function analyzeLogs() {
   switchTab('analysis');
 
   const analysisTab = document.getElementById('tab-analysis');
-  analysisTab.innerHTML = `<div class="analyzing-spinner"><div class="spinner"></div> KI analysiert Log...</div>`;
+  const stopAnalysisTimer = startLoadingTimer(analysisTab, [
+    'KI analysiert OCPP-Log…',
+    'Prüfe Nachrichtenreihenfolge…',
+    'Erkenne Fehlermuster…',
+    'Erstelle Diagnose…',
+    'Fast fertig…',
+  ]);
 
   let fullText = '';
   let success  = false;
@@ -781,6 +787,7 @@ async function analyzeLogs() {
 
       if (!started) {
         started = true;
+        stopAnalysisTimer();
         analysisTab.innerHTML = '';
       }
 
@@ -792,6 +799,7 @@ async function analyzeLogs() {
     success = true;
     analysisDone = true;
   } catch (err) {
+    stopAnalysisTimer();
     analysisTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Analyse fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
     showToast('Analyse-Fehler: ' + err.message, 'error');
   } finally {
@@ -821,6 +829,38 @@ function renderAnalysis(container, text, streaming) {
 
   // Auto-scroll to bottom during streaming
   if (streaming) container.scrollTop = container.scrollHeight;
+}
+
+// ============================================================
+// Loading Timer – zeigt Sekundenanzahl + rotierende Statusmeldungen
+// ============================================================
+function startLoadingTimer(container, messages) {
+  let seconds = 0;
+
+  container.innerHTML = `
+    <div class="loading-state">
+      <div class="loading-spinner-row">
+        <div class="spinner"></div>
+        <span class="loading-msg">${messages[0]}</span>
+        <span class="loading-timer">0s</span>
+      </div>
+      <div class="loading-hint">Das KI-Modell arbeitet lokal – dies kann bis zu 1 Minute dauern</div>
+    </div>`;
+
+  const msgEl    = container.querySelector('.loading-msg');
+  const timerEl  = container.querySelector('.loading-timer');
+  let msgIdx = 0;
+
+  const interval = setInterval(() => {
+    seconds++;
+    timerEl.textContent = `${seconds}s`;
+    if (seconds % 8 === 0 && messages.length > 1) {
+      msgIdx = (msgIdx + 1) % messages.length;
+      msgEl.textContent = messages[msgIdx];
+    }
+  }, 1000);
+
+  return () => clearInterval(interval);
 }
 
 // ============================================================
@@ -861,9 +901,14 @@ async function draftExplanation() {
   explanationAbortController = new AbortController();
 
   explanationBtn.disabled = true;
-  explanationBtn.textContent = '⏳ Erkläre...';
+  explanationBtn.textContent = '⏳ Erstelle…';
   const signal = explanationAbortController.signal;
-  explanationTab.innerHTML = `<div class="analyzing-spinner"><div class="spinner"></div> Zusammenfassung wird erstellt...</div>`;
+  const stopExplanationTimer = startLoadingTimer(explanationTab, [
+    'Zusammenfassung wird erstellt…',
+    'Vereinfache technische Details…',
+    'Formuliere Handlungsempfehlungen…',
+    'Fast fertig…',
+  ]);
   explanationText = '';
   let success = false;
 
@@ -899,6 +944,7 @@ async function draftExplanation() {
 
       if (!started) {
         started = true;
+        stopExplanationTimer();
         explanationTab.innerHTML = '';
       }
 
@@ -910,6 +956,7 @@ async function draftExplanation() {
     success = true;
     explanationDone = true;
   } catch (err) {
+    stopExplanationTimer();
     explanationTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Zusammenfassung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
     if (err.name !== 'AbortError') {
       showToast('Fehler: ' + err.message, 'error');
