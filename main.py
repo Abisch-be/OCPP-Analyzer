@@ -21,6 +21,24 @@ _OCPP_PATTERN = re.compile(r"(\[\s*(?:2|3|4)\s*,\s*\"[^\"]*\".*\])")
 _TS_PATTERN   = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[.,]\d+)?Z?)\s*")
 _DIR_PATTERN  = re.compile(r"\b(SEND|RECV|->|<-)\b", re.IGNORECASE)
 
+# OCPP 1.6 spec: actions initiated by the Charging Station → direction SEND
+_CS_INITIATED_ACTIONS = frozenset({
+    "Authorize", "BootNotification", "DataTransfer",
+    "DiagnosticsStatusNotification", "FirmwareStatusNotification",
+    "Heartbeat", "MeterValues", "StartTransaction", "StatusNotification",
+    "StopTransaction",
+})
+
+# OCPP 1.6 spec: actions initiated by the Central System/Backend → direction RECV
+_BACKEND_INITIATED_ACTIONS = frozenset({
+    "CancelReservation", "ChangeAvailability", "ChangeConfiguration",
+    "ClearCache", "ClearChargingProfile", "GetCompositeSchedule",
+    "GetConfiguration", "GetDiagnostics", "GetLocalListVersion",
+    "RemoteStartTransaction", "RemoteStopTransaction", "ReserveNow",
+    "Reset", "SendLocalList", "SetChargingProfile", "TriggerMessage",
+    "UnlockConnector", "UpdateFirmware",
+})
+
 app = FastAPI(title="OCPP Log Analyzer")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -42,13 +60,12 @@ MSG_TYPES = {2: "CALL", 3: "CALLRESULT", 4: "CALLERROR"}
 
 
 def _table_sort_key(line: str) -> tuple:
-    parts = line.split(' ', 2)
+    parts = line.split(' ', 1)
     ts = parts[0] if parts else ''
     mtype = 9
-    if len(parts) >= 3:
-        m = _SORT_TYPE_RE.search(parts[2])
-        if m:
-            mtype = int(m.group(1))
+    m = _SORT_TYPE_RE.search(line)
+    if m:
+        mtype = int(m.group(1))
     return (ts, mtype)
 
 
@@ -65,8 +82,9 @@ class AnalyzeRequest(BaseModel):
 
 
 def is_table_format(log_content: str) -> bool:
-    """Erkennt ob der Log im Web-UI Tabellenformat vorliegt (DD.MM.YYYY | HH:MM:SS)."""
-    for line in log_content.split("\n")[:15]:
+    """Erkennt ob der Log im Web-UI Tabellenformat vorliegt (DD.MM.YYYY | HH:MM:SS).
+    Durchsucht mehr Zeilen, da chaotisch kopierter Text viel UI-Rauschen voranstellen kann."""
+    for line in log_content.split("\n")[:100]:
         if _DATE_PATTERN.search(line):
             return True
     return False
@@ -75,12 +93,15 @@ def is_table_format(log_content: str) -> bool:
 def preprocess_table_format(log_content: str) -> str:
     """Konvertiert das Web-UI Tabellenformat in ein für den Parser lesbares Format.
 
-    Eingabe (zwei Zeilen pro Nachricht):
-        StatusNotification    03.03.2026 | 13:47:24    to Backend (Request)
-        [ 2, "abc123", "StatusNotification", {...} ]
+    Eingabe (ein oder zwei Zeilen pro Nachricht, beliebige UI-Sprache):
+        Heartbeat    05.03.2026 | 21:29:24    vom Backend (success)
+        [ 3, "1690623359", { "currentTime": "2026-03-05T20:29:24.322Z" } ]
 
-    Ausgabe (eine Zeile):
-        2026-03-03T13:47:24.000Z SEND [ 2, "abc123", "StatusNotification", {...} ]
+    Ausgabe (eine Zeile, Richtung wird aus OCPP-Action inferiert):
+        2026-03-05T21:29:24.000Z [ 3, "1690623359", { "currentTime": "..." } ]
+
+    Die Richtungsbestimmung erfolgt sprachunabhängig im Hauptparser anhand
+    der OCPP 1.6 Spec (welche Actions von CS vs. Backend initiiert werden).
     """
     lines = log_content.split("\n")
     result = []
@@ -89,25 +110,13 @@ def preprocess_table_format(log_content: str) -> str:
     while i < len(lines):
         stripped = lines[i].strip()
 
-        # Header-Zeile überspringen
-        if "Event type" in stripped and "Date / Time" in stripped:
-            i += 1
-            continue
-
         match = _META_PATTERN.match(stripped)
         if match:
             date_str = match.group(2)   # DD.MM.YYYY
             time_str = match.group(3)   # HH:MM:SS
-            direction_str = match.group(4).strip()
 
             day, month, year = date_str.split(".")
             iso_ts = f"{year}-{month}-{day}T{time_str}.000Z"
-
-            direction = (
-                "SEND"
-                if "to Backend" in direction_str or "from Charging station" in direction_str
-                else "RECV"
-            )
 
             # Nächste nicht-leere Zeile muss das JSON sein
             j = i + 1
@@ -115,12 +124,17 @@ def preprocess_table_format(log_content: str) -> str:
                 j += 1
 
             if j < len(lines) and lines[j].strip().startswith("["):
-                result.append(f"{iso_ts} {direction} {lines[j].strip()}")
+                result.append(f"{iso_ts} {lines[j].strip()}")
                 i = j + 1
                 continue
 
-        if stripped:
-            result.append(lines[i])
+        # Zeilen mit reinen OCPP-JSON-Arrays direkt übernehmen (für einzeilige Formate)
+        if stripped.startswith("[") and _OCPP_PATTERN.search(stripped):
+            result.append(stripped)
+            i += 1
+            continue
+
+        # Sonstiges UI-Rauschen ignorieren (Logos, Navigation, Header, etc.)
         i += 1
 
     # Chronologisch sortieren: Timestamp aufsteigend, CALL (2) vor CALLRESULT (3) bei gleichem Timestamp
@@ -195,6 +209,13 @@ def parse_ocpp_logs(log_content: str) -> dict:
             payload = msg_json[3] if len(msg_json) > 3 else {}
             msg["action"] = action
             msg["payload"] = payload
+            # Richtung aus OCPP 1.6 Spec ableiten (sprachunabhängig)
+            if direction is None:
+                if action in _CS_INITIATED_ACTIONS:
+                    direction = "SEND"
+                elif action in _BACKEND_INITIATED_ACTIONS:
+                    direction = "RECV"
+            msg["direction"] = direction
             call_map[unique_id] = msg
 
             if action == "BootNotification":
@@ -248,6 +269,14 @@ def parse_ocpp_logs(log_content: str) -> dict:
                 original_call = call_map[unique_id]
                 msg["action"] = original_call.get("action", "Unknown")
                 original_call["answered"] = True
+                # Richtung: Antwort ist entgegengesetzt zum ursprünglichen CALL
+                if direction is None:
+                    call_dir = original_call.get("direction")
+                    if call_dir == "SEND":
+                        direction = "RECV"
+                    elif call_dir == "RECV":
+                        direction = "SEND"
+                msg["direction"] = direction
 
                 if isinstance(payload, dict):
                     status = payload.get("status", "")
@@ -306,7 +335,15 @@ def parse_ocpp_logs(log_content: str) -> dict:
             if unique_id in call_map:
                 action = call_map[unique_id].get("action", "Unknown")
                 call_map[unique_id]["answered"] = True
+                # Richtung: Antwort ist entgegengesetzt zum ursprünglichen CALL
+                if direction is None:
+                    call_dir = call_map[unique_id].get("direction")
+                    if call_dir == "SEND":
+                        direction = "RECV"
+                    elif call_dir == "RECV":
+                        direction = "SEND"
             msg["action"] = action
+            msg["direction"] = direction
 
             errors.append(
                 {
