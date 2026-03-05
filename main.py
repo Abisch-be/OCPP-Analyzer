@@ -530,21 +530,29 @@ async def draft_email(request: AnalyzeRequest, _: Annotated[str, Depends(authent
     )
 
     system_prompt = """Du bist ein Assistent für Hotline- und Service-Mitarbeiter im Bereich Elektromobilität.
-Deine Aufgabe: Erstelle eine verständliche Erklärung, die ein Service-Mitarbeiter nutzen kann,
-um einem Endkunden oder einer meldenden Person die Situation rund um die Ladestation zu erläutern.
+Deine Aufgabe: Erstelle eine strukturierte, verständliche Erklärung für Service-Mitarbeiter.
 
-Regeln:
-- Schreibe auf Deutsch, klar und strukturiert (max. 300 Wörter)
+Ausgabeformat – verwende Markdown mit exakt diesen Abschnitten (Reihenfolge einhalten):
+
+## Was ist passiert?
+Kurze Zusammenfassung der Situation in 2–4 Sätzen. Konkretes Datum und Uhrzeit aus dem Log nennen.
+
+## Erkannte Probleme
+Aufzählung der Fehler und Warnungen in Alltagssprache. Falls keine Fehler: kurz beschreiben, dass alles normal aussieht.
+
+## Was bedeutet das für den Nutzer?
+Erklärung der Auswirkungen auf den Ladevorgang in einfacher Sprache.
+
+## Nächste Schritte
+Konkrete, priorisierte Handlungsempfehlungen um die Ladestation wieder betriebsbereit zu machen. Als nummerierte Liste.
+
+Allgemeine Regeln:
+- Schreibe auf Deutsch, sachlich und verständlich
 - Keine Fachbegriffe – übersetze OCPP-Konzepte in Alltagssprache
-  (z.B. "CALL" → "Anfrage", "CALLERROR" → "Fehlermeldung", "BootNotification" → "Einschalten der Ladestation",
-   "StatusNotification" → "Statusmeldung der Ladestation", "Heartbeat" → "regelmäßiges Lebenszeichen")
-- Zitiere konkrete Datum und Uhrzeit aus dem Log (z.B. „Am 14.01.2024 um 10:22 Uhr meldete die Station einen Erdschlussfehler")
-- Verwende NIEMALS relative Zeitangaben wie „heute", „gestern" oder „heute Morgen" – immer das tatsächliche Datum aus dem Log nennen
-- Erkläre was die Ladestation gemacht hat, was schiefgelaufen ist (falls etwas), und was das für den Nutzer bedeutet
-- Nutze kurze Absätze oder eine einfache Aufzählung
-- Kein E-Mail-Format, keine Begrüßung, keine Grußformel – reiner Erklärungstext für den internen Gebrauch
-- Tone: sachlich, ruhig, verständnisvoll – geeignet um es dem Kunden weiterzuerklären
-- Falls keine Fehler vorhanden: Sag dass alles normal aussieht und beschreibe kurz den Ablauf mit Zeitbezug"""
+  (z.B. "CALLERROR" → "Fehlermeldung", "BootNotification" → "Einschalten der Ladestation",
+   "StatusNotification" → "Statusmeldung", "Heartbeat" → "regelmäßiges Lebenszeichen")
+- Verwende NIEMALS relative Zeitangaben – immer das tatsächliche Datum/Uhrzeit aus dem Log
+- Kein E-Mail-Format, keine Begrüßung, keine Grußformel"""
 
     context_directive = ""
     if request.customer_context.strip():
@@ -575,7 +583,7 @@ Log-Ausschnitt (für Zeitbezüge und konkrete Ereignisse):
 {log_preview}
 ```
 
-Schreibe jetzt die Erklärung (kein E-Mail-Format, kein Betreff, kein Gruß):"""
+Schreibe jetzt die strukturierte Erklärung mit allen vier Markdown-Abschnitten:"""
 
     async def stream_response():
         try:

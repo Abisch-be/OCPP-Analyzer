@@ -890,9 +890,18 @@ function renderEmailDraft(container, text, streaming) {
          <span class="email-status-hint" id="emailCopyHint"></span>
        </div>`;
 
+  let bodyHtml;
+  try {
+    bodyHtml = (typeof marked !== 'undefined')
+      ? marked.parse(text)
+      : `<pre>${escapeHtml(text)}</pre>`;
+  } catch {
+    bodyHtml = `<pre>${escapeHtml(text)}</pre>`;
+  }
+
   container.innerHTML = `<div class="email-draft-wrapper">
     ${toolbar}
-    <div class="email-draft-content">${escapeHtml(text)}${cursor}</div>
+    <div class="email-draft-content analysis-content">${bodyHtml}${cursor}</div>
   </div>`;
 
   if (streaming) container.scrollTop = container.scrollHeight;
