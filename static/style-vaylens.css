@@ -320,9 +320,16 @@ body {
 /* ============================================================
    Log Textarea
    ============================================================ */
+.log-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .log-textarea {
   flex: 1;
-  margin: 10px 16px;
+  width: 100%;
+  margin: 0;
   padding: 11px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
