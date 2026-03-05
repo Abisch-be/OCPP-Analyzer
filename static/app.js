@@ -791,11 +791,6 @@ async function draftEmail() {
   switchTab('email');
   const emailTab = document.getElementById('tab-email');
 
-  if (emailAbortController) {
-    emailAbortController.abort();
-  }
-  emailAbortController = new AbortController();
-
   const content = logInput.value.trim();
   if (!content) {
     emailTab.innerHTML = `<div class="email-hint-state"><div class="empty-icon">📄</div><div>Bitte zuerst einen OCPP-Log einfügen und parsen.</div></div>`;
@@ -813,6 +808,12 @@ async function draftEmail() {
     await parseLogs();
     if (!parsedData) return;
   }
+
+  // Abort any still-running previous request, then create fresh controller
+  if (emailAbortController) {
+    emailAbortController.abort();
+  }
+  emailAbortController = new AbortController();
 
   draftEmailBtn.disabled = true;
   draftEmailBtn.textContent = '⏳ Erkläre...';
@@ -864,8 +865,8 @@ async function draftEmail() {
     success = true;
     explanationDone = true;
   } catch (err) {
+    emailTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Erklärung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
     if (err.name !== 'AbortError') {
-      emailTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Erklärung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
       showToast('Fehler: ' + err.message, 'error');
     }
   } finally {
