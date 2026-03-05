@@ -676,3 +676,37 @@ select.filter-input { width: 170px; cursor: pointer; }
   .input { width: 100%; } .select { width: 100%; }
   .settings-inner { flex-direction: column; align-items: stretch; }
 }
+
+/* ============================================================
+   OCPP Tooltip
+   ============================================================ */
+.ocpp-tooltip {
+  position: absolute;
+  z-index: 9999;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+  padding: 10px 14px;
+  pointer-events: auto;
+  transition: opacity 0.12s;
+}
+.ocpp-tooltip.hidden { display: none; }
+.ocpp-tooltip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 5px;
+  font-family: 'Courier New', monospace;
+}
+.ocpp-tooltip-body {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.pair-action-name.has-ocpp-desc {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}

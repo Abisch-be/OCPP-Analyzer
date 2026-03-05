@@ -574,7 +574,7 @@ function buildPairCard(pair) {
         <span class="pair-row-arrow">↑</span>
         <span class="pair-row-type">CALL</span>
         ${dirBadge}
-        <span class="pair-action-name" title="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</span>
+        <span class="pair-action-name${OCPP_DESCRIPTIONS[call.action] ? ' has-ocpp-desc' : ''}" data-ocpp-action="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</span>
       </div>
       ${payloadHtml}
     </div>`;
@@ -944,6 +944,41 @@ function renderExplanation(container, text, streaming) {
 // ============================================================
 // Empty-state HTML constants
 // ============================================================
+const OCPP_DESCRIPTIONS = {
+  Authorize:                        'Die Ladestation fragt das Backend, ob eine RFID-Karte oder ein Nutzer zum Laden berechtigt ist.',
+  BootNotification:                 'Die Ladestation meldet sich beim Backend an und übermittelt Hersteller, Modell und Seriennummer. Das Backend antwortet mit Uhrzeit und Heartbeat-Intervall.',
+  ChangeAvailability:               'Das Backend ändert die Verfügbarkeit eines Anschlusses oder der gesamten Ladestation (Verfügbar / Nicht verfügbar).',
+  ChangeConfiguration:              'Das Backend ändert einen Konfigurationsparameter der Ladestation.',
+  ClearCache:                       'Das Backend weist die Ladestation an, ihren lokalen Autorisierungscache zu löschen.',
+  ClearChargingProfile:             'Das Backend löscht ein oder mehrere Ladeprofile von der Ladestation.',
+  DataTransfer:                     'Ermöglicht den Austausch herstellerspezifischer Daten, die nicht im OCPP-Standard definiert sind.',
+  DiagnosticsStatusNotification:    'Die Ladestation meldet den Fortschritt einer laufenden Diagnosedaten-Übertragung.',
+  FirmwareStatusNotification:       'Die Ladestation meldet den Stand einer Firmware-Aktualisierung (z.B. Herunterladen, Installieren, Abgeschlossen).',
+  GetCompositeSchedule:             'Das Backend fragt den zusammengesetzten Ladezeitplan eines Anschlusses ab.',
+  GetConfiguration:                 'Das Backend fragt die aktuelle Konfiguration der Ladestation ab.',
+  GetDiagnostics:                   'Das Backend fordert die Ladestation auf, Diagnosedateien hochzuladen.',
+  GetLocalListVersion:              'Das Backend fragt die Versionsnummer der lokalen Autorisierungsliste ab.',
+  Heartbeat:                        'Regelmäßiges Lebenszeichen der Ladestation. Bestätigt, dass die Verbindung aktiv ist, und synchronisiert die Uhrzeit.',
+  LogStatusNotification:            'Die Ladestation meldet den Status einer laufenden Log-Datei-Übertragung (Security-Logging).',
+  MeterValues:                      'Die Ladestation sendet aktuelle Messwerte (Strom, Spannung, Energie) – in regelmäßigen Abständen oder auf Anforderung.',
+  RemoteStartTransaction:           'Das Backend fordert die Ladestation auf, einen Ladevorgang zu starten – z.B. per App-Befehl.',
+  RemoteStopTransaction:            'Das Backend fordert die Ladestation auf, einen laufenden Ladevorgang zu beenden.',
+  ReserveNow:                       'Das Backend reserviert einen Ladepunkt für einen bestimmten Nutzer.',
+  CancelReservation:                'Das Backend storniert eine bestehende Reservierung.',
+  Reset:                            'Das Backend fordert einen Neustart der Ladestation (Soft = Neustart nach laufendem Ladevorgang, Hard = sofortiger Neustart).',
+  SecurityEventNotification:        'Die Ladestation meldet ein sicherheitsrelevantes Ereignis an das Backend.',
+  SendLocalList:                    'Das Backend sendet eine aktualisierte lokale Autorisierungsliste an die Ladestation.',
+  SetChargingProfile:               'Das Backend sendet ein Ladeprofil zur Steuerung von Ladeleistung oder -zeitplan.',
+  SignCertificate:                  'Die Ladestation sendet eine Zertifikatsanfrage (CSR) an das Backend zur Signierung.',
+  SignedFirmwareStatusNotification: 'Die Ladestation meldet den Status einer signierten Firmware-Aktualisierung.',
+  StartTransaction:                 'Die Ladestation informiert das Backend, dass ein Ladevorgang begonnen hat. Enthält Karten-ID, Zählerstand und Startzeitpunkt.',
+  StatusNotification:               'Die Ladestation teilt dem Backend ihren aktuellen Zustand mit (z.B. Verfügbar, Laden, Gestört). Wird bei jeder Statusänderung gesendet.',
+  StopTransaction:                  'Die Ladestation meldet das Ende eines Ladevorgangs. Enthält Endzählerstand, geladene Energiemenge und Stoppgrund.',
+  TriggerMessage:                   'Das Backend fordert die Ladestation auf, eine bestimmte Nachricht sofort zu senden (z.B. StatusNotification oder Heartbeat).',
+  UnlockConnector:                  'Das Backend fordert die Ladestation auf, einen Stecker mechanisch freizugeben.',
+  UpdateFirmware:                   'Das Backend weist die Ladestation an, eine neue Firmware-Version herunterzuladen und zu installieren.',
+};
+
 const EMPTY_STATES = {
   messages: '<div class="empty-state"><div class="empty-icon">📭</div><div>Log parsen um Nachrichten anzuzeigen</div></div>',
   analysis: '<div class="empty-state"><div class="empty-icon">🔬</div><div>„🤖 KI-Analyse" klicken um eine detaillierte Analyse zu erhalten</div></div>',
@@ -1030,6 +1065,57 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+
+// --- OCPP Tooltip ---
+(function initOcppTooltip() {
+  const tooltip = document.getElementById('ocppTooltip');
+  if (!tooltip) return;
+  const titleEl = tooltip.querySelector('.ocpp-tooltip-title');
+  const bodyEl  = tooltip.querySelector('.ocpp-tooltip-body');
+  let hideTimer;
+
+  function show(action, anchorEl) {
+    const desc = OCPP_DESCRIPTIONS[action];
+    if (!desc) return;
+    clearTimeout(hideTimer);
+    titleEl.textContent = action;
+    bodyEl.textContent  = desc;
+    tooltip.classList.remove('hidden');
+
+    const rect = anchorEl.getBoundingClientRect();
+    const scrollY = window.scrollY;
+    let top  = rect.bottom + scrollY + 6;
+    let left = rect.left + window.scrollX;
+
+    tooltip.style.left = '0';
+    tooltip.style.top  = '0';
+    tooltip.style.visibility = 'hidden';
+    tooltip.classList.remove('hidden');
+    const tw = tooltip.offsetWidth;
+    if (left + tw > window.innerWidth - 12) left = window.innerWidth - tw - 12;
+    tooltip.style.left = left + 'px';
+    tooltip.style.top  = top + 'px';
+    tooltip.style.visibility = '';
+  }
+
+  function hide() {
+    hideTimer = setTimeout(() => tooltip.classList.add('hidden'), 120);
+  }
+
+  const msgList = document.getElementById('msg-list');
+  if (!msgList) return;
+
+  msgList.addEventListener('mouseover', e => {
+    const el = e.target.closest('.pair-action-name[data-ocpp-action]');
+    if (el) show(el.dataset.ocppAction, el);
+  });
+  msgList.addEventListener('mouseout', e => {
+    if (e.target.closest('.pair-action-name[data-ocpp-action]')) hide();
+  });
+  tooltip.addEventListener('mouseover', () => clearTimeout(hideTimer));
+  tooltip.addEventListener('mouseout', hide);
+})();
 
 // ============================================================
 // Example OCPP 1.6 Logs
