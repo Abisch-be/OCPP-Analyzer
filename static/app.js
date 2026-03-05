@@ -1103,14 +1103,15 @@ function escapeHtml(str) {
     hideTimer = setTimeout(() => tooltip.classList.add('hidden'), 120);
   }
 
-  const msgList = document.getElementById('msg-list');
-  if (!msgList) return;
+  // tab-messages exists in the static HTML; msg-list is created dynamically
+  const msgContainer = document.getElementById('tab-messages');
+  if (!msgContainer) return;
 
-  msgList.addEventListener('mouseover', e => {
+  msgContainer.addEventListener('mouseover', e => {
     const el = e.target.closest('.pair-action-name[data-ocpp-action]');
     if (el) show(el.dataset.ocppAction, el);
   });
-  msgList.addEventListener('mouseout', e => {
+  msgContainer.addEventListener('mouseout', e => {
     if (e.target.closest('.pair-action-name[data-ocpp-action]')) hide();
   });
   tooltip.addEventListener('mouseover', () => clearTimeout(hideTimer));
