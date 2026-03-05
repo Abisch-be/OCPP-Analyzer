@@ -550,7 +550,7 @@ Regeln:
     if request.customer_context.strip():
         context_directive = (
             f"\n\nPRIMÄRER FOKUS: Deine Erklärung muss direkt und konkret auf das gemeldete Problem "
-            f"„{request.customer_context.strip()}" eingehen. "
+            f"'{request.customer_context.strip()}' eingehen. "
             f"Beantworte: Bestätigt der Log dieses Problem? Wann genau ist es aufgetreten? Was war die Ursache? "
             f"Alles andere (normale Abläufe etc.) ist nachrangig – das gemeldete Problem steht im Mittelpunkt."
         )
