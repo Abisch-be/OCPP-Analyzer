@@ -328,7 +328,7 @@ function renderTimelineChart(messages) {
       labels: data.labels,
       datasets: [
         { label: 'OK',        data: data.ok,      backgroundColor: '#22c55e', stack: 'logs' },
-        { label: 'Warnungen', data: data.warning,  backgroundColor: '#f97316', stack: 'logs' },
+        { label: 'Unvollständig', data: data.warning,  backgroundColor: '#f97316', stack: 'logs' },
         { label: 'Fehler',    data: data.error,    backgroundColor: '#ef4444', stack: 'logs' },
       ],
     },
