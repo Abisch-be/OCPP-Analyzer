@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OCPP Log Analyzer</title>
+    <link rel="stylesheet" href="/static/style-light.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="header-logo">
+        <div class="logo-mark">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <span class="logo-text">OCPP Analyzer</span>
+        <span class="logo-badge">1.6</span>
+      </div>
+      <div class="header-right">
+        <span class="header-desc">EV Charging Diagnostic Tool</span>
+      </div>
+    </header>
+
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-inner">
+        <div class="settings-group">
+          <label class="settings-label" for="ollamaUrl">Ollama URL</label>
+          <input id="ollamaUrl" type="text" class="input" placeholder="http://your-vps:11434" value="http://localhost:11434" />
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="modelSelect">Modell</label>
+          <select id="modelSelect" class="select">
+            <option value="">-- Modelle laden --</option>
+          </select>
+        </div>
+        <button id="loadModelsBtn" class="btn btn-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          Modelle laden
+        </button>
+        <span id="modelsStatus" class="status-text"></span>
+      </div>
+    </div>
+
+    <main class="main-grid">
+      <div class="panel left-panel">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            Log Eingabe
+          </span>
+          <div class="toolbar-actions">
+            <label class="btn-tool" for="fileInput" title="Datei öffnen">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            </label>
+            <input id="fileInput" type="file" class="file-input-hidden" accept=".log,.txt,.json" />
+            <button id="exampleBtn" class="btn-tool" title="Beispiel laden">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+            <button id="settingsToggle" class="btn-tool" title="KI-Einstellungen">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M2 12h2M20 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"></path></svg>
+            </button>
+            <button id="clearBtn" class="btn-tool btn-tool-danger" title="Leeren">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="context-section">
+          <label class="context-label">
+            Kundenkontext
+            <span class="context-hint">optional</span>
+          </label>
+          <textarea
+            id="customerContext"
+            class="context-textarea"
+            rows="3"
+            maxlength="500"
+            placeholder="Gemeldetes Problem beschreiben, z.B. Ladeabbrüche nach 5 Min, kein Ladestart..."
+            spellcheck="true"
+          ></textarea>
+        </div>
+
+        <textarea
+          id="logInput"
+          class="log-textarea"
+          placeholder='OCPP 1.6 Log hier einfügen oder Datei ablegen...&#10;&#10;Format: [2,"id","Action",{...}]'
+          spellcheck="false"
+        ></textarea>
+
+        <div class="char-count">
+          <span id="charCount">0</span> Zeichen
+          <span class="sep">·</span>
+          <span id="lineCount">0</span> Zeilen
+        </div>
+
+        <div class="actions">
+          <button id="parseBtn" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            Parsen
+          </button>
+          <button id="analyzeBtn" class="btn btn-accent">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"></path><path d="M12 8v4l3 3"></path><path d="M16 2l4 4-4 4"></path><path d="M20 2v4h-4"></path></svg>
+            KI-Analyse
+          </button>
+          <button id="draftEmailBtn" class="btn btn-outline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            Einfache Erklärung
+          </button>
+        </div>
+      </div>
+
+      <div class="panel right-panel">
+        <div class="tabs">
+          <button class="tab active" data-tab="issues">
+            Probleme
+            <span id="issuesBadge" class="tab-badge hidden">0</span>
+          </button>
+          <button class="tab" data-tab="messages">Nachrichten</button>
+          <button class="tab" data-tab="analysis">KI-Analyse</button>
+          <button class="tab" data-tab="email">Erklärung</button>
+        </div>
+
+        <div id="tab-issues" class="tab-content active">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            </div>
+            <div class="empty-title">Keine Probleme erkannt</div>
+            <div class="empty-sub">Log parsen um Issues anzuzeigen</div>
+          </div>
+        </div>
+        <div id="tab-messages" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            </div>
+            <div class="empty-title">Keine Nachrichten</div>
+            <div class="empty-sub">Log parsen um Nachrichten anzuzeigen</div>
+          </div>
+        </div>
+        <div id="tab-analysis" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+            <div class="empty-title">Keine Analyse vorhanden</div>
+            <div class="empty-sub">„KI-Analyse" klicken um zu starten</div>
+          </div>
+        </div>
+        <div id="tab-email" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <div class="empty-title">Keine Erklärung vorhanden</div>
+            <div class="empty-sub">„Einfache Erklärung" klicken</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
