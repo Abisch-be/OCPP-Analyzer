@@ -863,7 +863,7 @@ async function draftExplanation() {
   explanationBtn.disabled = true;
   explanationBtn.textContent = '⏳ Erkläre...';
   const signal = explanationAbortController.signal;
-  explanationTab.innerHTML = `<div class="analyzing-spinner"><div class="spinner"></div> Einfache Erklärung wird erstellt...</div>`;
+  explanationTab.innerHTML = `<div class="analyzing-spinner"><div class="spinner"></div> Zusammenfassung wird erstellt...</div>`;
   explanationText = '';
   let success = false;
 
@@ -906,11 +906,11 @@ async function draftExplanation() {
     }
 
     renderExplanation(explanationTab, explanationText, false);
-    showToast('✅ Erklärung erstellt', 'success');
+    showToast('✅ Zusammenfassung erstellt', 'success');
     success = true;
     explanationDone = true;
   } catch (err) {
-    explanationTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Erklärung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
+    explanationTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Zusammenfassung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
     if (err.name !== 'AbortError') {
       showToast('Fehler: ' + err.message, 'error');
     }
@@ -918,7 +918,7 @@ async function draftExplanation() {
     explanationAbortController = null;
     explanationBtn.disabled = false;
     if (!success) {
-      explanationBtn.textContent = '💡 Einfache Erklärung';
+      explanationBtn.textContent = '💡 Zusammenfassung';
     } else {
       explanationBtn.textContent = '✅ Erklärt';
       explanationBtn.title = 'Bereits erklärt – Log leeren für neue Erklärung';
@@ -983,7 +983,7 @@ const EMPTY_STATES = {
   messages: '<div class="empty-state"><div class="empty-icon">📭</div><div>Log parsen um Nachrichten anzuzeigen</div></div>',
   analysis: '<div class="empty-state"><div class="empty-icon">🔬</div><div>„🤖 KI-Analyse" klicken um eine detaillierte Analyse zu erhalten</div></div>',
   issues:   '<div class="empty-state"><div class="empty-icon">✅</div><div>Keine Issues erkannt</div></div>',
-  explanation: '<div class="empty-state"><div class="empty-icon">💡</div><div>„💡 Einfache Erklärung" klicken um eine verständliche Zusammenfassung zu erhalten</div></div>',
+  explanation: '<div class="empty-state"><div class="empty-icon">💡</div><div>„💡 Zusammenfassung" klicken um eine verständliche Zusammenfassung zu erhalten</div></div>',
 };
 
 // ============================================================
@@ -1021,7 +1021,7 @@ function markResultsDirty() {
   analyzeBtn.textContent = '🤖 KI-Analyse';
   analyzeBtn.title       = '';
   explanationBtn.disabled    = false;
-  explanationBtn.textContent = '💡 Einfache Erklärung';
+  explanationBtn.textContent = '💡 Zusammenfassung';
   explanationBtn.title       = '';
 }
 
