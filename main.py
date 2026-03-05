@@ -546,9 +546,18 @@ Regeln:
 - Tone: sachlich, ruhig, verständnisvoll – geeignet um es dem Kunden weiterzuerklären
 - Falls keine Fehler vorhanden: Sag dass alles normal aussieht und beschreibe kurz den Ablauf mit Zeitbezug"""
 
+    context_directive = ""
+    if request.customer_context.strip():
+        context_directive = (
+            f"\n\nPRIMÄRER FOKUS: Deine Erklärung muss direkt und konkret auf das gemeldete Problem "
+            f"„{request.customer_context.strip()}" eingehen. "
+            f"Beantworte: Bestätigt der Log dieses Problem? Wann genau ist es aufgetreten? Was war die Ursache? "
+            f"Alles andere (normale Abläufe etc.) ist nachrangig – das gemeldete Problem steht im Mittelpunkt."
+        )
+
     user_prompt = f"""Erstelle eine Erklärung für Hotline-/Service-Mitarbeiter zur folgenden Situation:
 
-Gemeldetes Problem: "{customer_issue}"
+Gemeldetes Problem: "{customer_issue}"{context_directive}
 
 Was der Analyzer gefunden hat:
 - Gesamtnachrichten: {stats.get('total', 0)}
