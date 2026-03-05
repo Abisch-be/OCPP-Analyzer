@@ -568,6 +568,7 @@ function buildPairCard(pair) {
     const dirBadge = dirBadgeHtml(call.action, false, call.direction);
     const payloadHtml = buildPayloadHtml(formatPayload(call.payload));
     html += `<div class="pair-row pair-request">
+      <div class="pair-action-name${OCPP_DESCRIPTIONS[call.action] ? ' has-ocpp-desc' : ''}" data-ocpp-action="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</div>
       <div class="pair-row-meta">
         <span class="msg-line">L${call.line}</span>
         ${tsHtml(call.timestamp)}
@@ -575,7 +576,6 @@ function buildPairCard(pair) {
         <span class="pair-row-type">CALL</span>
         ${dirBadge}
       </div>
-      <div class="pair-action-name${OCPP_DESCRIPTIONS[call.action] ? ' has-ocpp-desc' : ''}" data-ocpp-action="${escapeHtml(call.action || '')}">${escapeHtml(call.action || call.uniqueId)}</div>
       ${payloadHtml}
     </div>`;
   }
