@@ -653,6 +653,21 @@ select.filter-input { width: 170px; cursor: pointer; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
 /* ============================================================
+   Timeline Chart
+   ============================================================ */
+.timeline-chart-section {
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  height: 180px;
+  flex-shrink: 0;
+}
+.timeline-chart-section canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ============================================================
    Responsive
    ============================================================ */
 @media (max-width: 768px) {

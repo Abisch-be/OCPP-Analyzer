@@ -11,6 +11,7 @@ let emailAbortController   = null;
 let emailDraftText         = '';
 let analysisDone           = false;
 let explanationDone        = false;
+let timelineChartInstance  = null;
 
 // --- DOM References ---
 const logInput        = document.getElementById('logInput');
@@ -242,6 +243,99 @@ function updateStats(stats) {
 }
 
 // ============================================================
+// Timeline Chart
+// ============================================================
+function buildTimelineChartData(messages, errors, warnings) {
+  const errorLines   = new Set((errors   || []).map(e => e.line));
+  const warningLines = new Set((warnings || []).map(w => w.line));
+
+  const timed = messages
+    .map(m => ({ ts: m.timestamp ? new Date(m.timestamp).getTime() : NaN, line: m.line }))
+    .filter(x => !isNaN(x.ts));
+
+  if (timed.length === 0) return null;
+
+  const minTs = Math.min(...timed.map(x => x.ts));
+  const maxTs = Math.max(...timed.map(x => x.ts));
+  const range = maxTs - minTs;
+
+  if (range <= 0) return null;
+
+  let bucketMs;
+  if      (range < 60 * 60 * 1000)       bucketMs = 60 * 1000;       // < 1 h  → 1-min buckets
+  else if (range < 24 * 60 * 60 * 1000)  bucketMs = 5  * 60 * 1000;  // < 1 d  → 5-min buckets
+  else                                    bucketMs = 60 * 60 * 1000;  // >= 1 d → 1-h  buckets
+
+  const buckets = new Map();
+  for (const msg of messages) {
+    if (!msg.timestamp) continue;
+    const t = new Date(msg.timestamp).getTime();
+    if (isNaN(t)) continue;
+    const idx = Math.floor((t - minTs) / bucketMs);
+    if (!buckets.has(idx)) buckets.set(idx, { ok: 0, warning: 0, error: 0, startTs: minTs + idx * bucketMs });
+    const b = buckets.get(idx);
+    if      (errorLines.has(msg.line))   b.error++;
+    else if (warningLines.has(msg.line)) b.warning++;
+    else                                 b.ok++;
+  }
+
+  const sorted = [...buckets.entries()].sort((a, b) => a[0] - b[0]);
+
+  const fmt = (ts) => {
+    const d = new Date(ts);
+    const hh = d.getHours().toString().padStart(2, '0');
+    const mm = d.getMinutes().toString().padStart(2, '0');
+    if (bucketMs >= 60 * 60 * 1000) {
+      const dd = d.getDate().toString().padStart(2, '0');
+      const mo = (d.getMonth() + 1).toString().padStart(2, '0');
+      return `${dd}.${mo} ${hh}:00`;
+    }
+    return `${hh}:${mm}`;
+  };
+
+  return {
+    labels:  sorted.map(([, b]) => fmt(b.startTs)),
+    ok:      sorted.map(([, b]) => b.ok),
+    warning: sorted.map(([, b]) => b.warning),
+    error:   sorted.map(([, b]) => b.error),
+  };
+}
+
+function renderTimelineChart(messages) {
+  const canvas = document.getElementById('timelineChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (timelineChartInstance) { timelineChartInstance.destroy(); timelineChartInstance = null; }
+
+  const data = buildTimelineChartData(messages, parsedData?.errors, parsedData?.warnings);
+  if (!data) return;
+
+  timelineChartInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: data.labels,
+      datasets: [
+        { label: 'OK',        data: data.ok,      backgroundColor: '#22c55e', stack: 'logs' },
+        { label: 'Warnungen', data: data.warning,  backgroundColor: '#f97316', stack: 'logs' },
+        { label: 'Fehler',    data: data.error,    backgroundColor: '#ef4444', stack: 'logs' },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, color: '#7E7E95', boxWidth: 12, padding: 12 } },
+        tooltip: { mode: 'index', intersect: false },
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#7E7E95', font: { size: 10 }, maxRotation: 45 }, grid: { color: 'rgba(0,0,0,0.06)' } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: '#7E7E95', font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } },
+      },
+    },
+  });
+}
+
+// ============================================================
 // Display Messages
 // ============================================================
 function displayMessages(messages) {
@@ -267,6 +361,9 @@ function displayMessages(messages) {
   const actionOptions = actions.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
 
   container.innerHTML = `
+    <div class="timeline-chart-section">
+      <canvas id="timelineChart"></canvas>
+    </div>
     <div class="msg-filter-bar">
       <select id="filterAction" class="filter-input">
         <option value="">Alle Event-Typen</option>
@@ -278,6 +375,8 @@ function displayMessages(messages) {
     </div>
     <div id="msg-list"></div>
   `;
+
+  renderTimelineChart(messages);
 
   document.getElementById('filterAction').addEventListener('change', renderFilteredPairs);
   document.getElementById('filterErrors').addEventListener('click', () => {
@@ -683,6 +782,11 @@ function renderAnalysis(container, text, streaming) {
 // Email Draft (Streaming)
 // ============================================================
 async function draftEmail() {
+  // If already done, just navigate to the tab
+  if (explanationDone) {
+    switchTab('email');
+    return;
+  }
   // Switch tab immediately so the user sees something happen
   switchTab('email');
   const emailTab = document.getElementById('tab-email');
@@ -766,8 +870,8 @@ async function draftEmail() {
     }
   } finally {
     emailAbortController = null;
+    draftEmailBtn.disabled = false;
     if (!success) {
-      draftEmailBtn.disabled = false;
       draftEmailBtn.textContent = '💡 Einfache Erklärung';
     } else {
       draftEmailBtn.textContent = '✅ Erklärt';
