@@ -7,8 +7,8 @@ let parsedData             = null;
 let isAnalyzing            = false;
 let allPairs               = [];
 let analyzeAbortController = null;
-let emailAbortController   = null;
-let emailDraftText         = '';
+let explanationAbortController   = null;
+let explanationText         = '';
 let analysisDone           = false;
 let explanationDone        = false;
 let timelineChartInstance  = null;
@@ -32,7 +32,7 @@ const modelsStatus    = document.getElementById('modelsStatus');
 const issuesBadge     = document.getElementById('issuesBadge');
 const toastContainer  = document.getElementById('toastContainer');
 const customerContext = document.getElementById('customerContext');
-const draftEmailBtn   = document.getElementById('draftEmailBtn');
+const explanationBtn   = document.getElementById('explanationBtn');
 
 // --- Initialization ---
 window.addEventListener('DOMContentLoaded', () => {
@@ -81,7 +81,7 @@ function setupEventListeners() {
     switchTab('messages');
   });
   analyzeBtn.addEventListener('click', analyzeLogs);
-  draftEmailBtn.addEventListener('click', draftEmail);
+  explanationBtn.addEventListener('click', draftExplanation);
   exampleBtn.addEventListener('click', loadExample);
   clearBtn.addEventListener('click', clearLog);
 
@@ -824,28 +824,28 @@ function renderAnalysis(container, text, streaming) {
 }
 
 // ============================================================
-// Email Draft (Streaming)
+// Erklärung (Streaming)
 // ============================================================
-async function draftEmail() {
+async function draftExplanation() {
   // If already done, just navigate to the tab
   if (explanationDone) {
-    switchTab('email');
+    switchTab('explanation');
     return;
   }
   // Switch tab immediately so the user sees something happen
-  switchTab('email');
-  const emailTab = document.getElementById('tab-email');
+  switchTab('explanation');
+  const explanationTab = document.getElementById('tab-explanation');
 
   const content = logInput.value.trim();
   if (!content) {
-    emailTab.innerHTML = `<div class="email-hint-state"><div class="empty-icon">📄</div><div>Bitte zuerst einen OCPP-Log einfügen und parsen.</div></div>`;
+    explanationTab.innerHTML = `<div class="explanation-hint-state"><div class="empty-icon">📄</div><div>Bitte zuerst einen OCPP-Log einfügen und parsen.</div></div>`;
     return;
   }
 
   const url   = ollamaUrl.value.trim();
   const model = modelSelect.value;
   if (!url || !model) {
-    emailTab.innerHTML = `<div class="email-hint-state"><div class="empty-icon">⚙️</div><div>Bitte Ollama URL und Modell in den <strong>Einstellungen</strong> konfigurieren.</div></div>`;
+    explanationTab.innerHTML = `<div class="explanation-hint-state"><div class="empty-icon">⚙️</div><div>Bitte Ollama URL und Modell in den <strong>Einstellungen</strong> konfigurieren.</div></div>`;
     return;
   }
 
@@ -855,20 +855,20 @@ async function draftEmail() {
   }
 
   // Abort any still-running previous request, then create fresh controller
-  if (emailAbortController) {
-    emailAbortController.abort();
+  if (explanationAbortController) {
+    explanationAbortController.abort();
   }
-  emailAbortController = new AbortController();
+  explanationAbortController = new AbortController();
 
-  draftEmailBtn.disabled = true;
-  draftEmailBtn.textContent = '⏳ Erkläre...';
-  const signal = emailAbortController.signal;
-  emailTab.innerHTML = `<div class="analyzing-spinner"><div class="spinner"></div> Einfache Erklärung wird erstellt...</div>`;
-  emailDraftText = '';
+  explanationBtn.disabled = true;
+  explanationBtn.textContent = '⏳ Erkläre...';
+  const signal = explanationAbortController.signal;
+  explanationTab.innerHTML = `<div class="analyzing-spinner"><div class="spinner"></div> Einfache Erklärung wird erstellt...</div>`;
+  explanationText = '';
   let success = false;
 
   try {
-    const response = await fetch('/api/draft-email', {
+    const response = await fetch('/api/explain', {
       method: 'POST',
       signal,
       headers: { 'Content-Type': 'application/json' },
@@ -895,73 +895,50 @@ async function draftEmail() {
       if (done) break;
 
       const chunk = decoder.decode(value, { stream: true });
-      emailDraftText += chunk;
+      explanationText += chunk;
 
       if (!started) {
         started = true;
-        emailTab.innerHTML = '';
+        explanationTab.innerHTML = '';
       }
 
-      renderEmailDraft(emailTab, emailDraftText, true);
+      renderExplanation(explanationTab, explanationText, true);
     }
 
-    renderEmailDraft(emailTab, emailDraftText, false);
+    renderExplanation(explanationTab, explanationText, false);
     showToast('✅ Erklärung erstellt', 'success');
     success = true;
     explanationDone = true;
   } catch (err) {
-    emailTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Erklärung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
+    explanationTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Erklärung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
     if (err.name !== 'AbortError') {
       showToast('Fehler: ' + err.message, 'error');
     }
   } finally {
-    emailAbortController = null;
-    draftEmailBtn.disabled = false;
+    explanationAbortController = null;
+    explanationBtn.disabled = false;
     if (!success) {
-      draftEmailBtn.textContent = '💡 Einfache Erklärung';
+      explanationBtn.textContent = '💡 Einfache Erklärung';
     } else {
-      draftEmailBtn.textContent = '✅ Erklärt';
-      draftEmailBtn.title = 'Bereits erklärt – Log leeren für neue Erklärung';
+      explanationBtn.textContent = '✅ Erklärt';
+      explanationBtn.title = 'Bereits erklärt – Log leeren für neue Erklärung';
     }
   }
 }
 
-function renderEmailDraft(container, text, streaming) {
-  const cursor  = streaming ? '<span class="streaming-indicator"></span>' : '';
-  const toolbar = streaming
-    ? `<div class="email-toolbar"><span class="email-status-hint">Generiere Erklärung…</span></div>`
-    : `<div class="email-toolbar">
-         <button class="btn btn-secondary" onclick="copyEmailDraft()">📋 Kopieren</button>
-         <span class="email-status-hint" id="emailCopyHint"></span>
-       </div>`;
-
-  let bodyHtml;
+function renderExplanation(container, text, streaming) {
   try {
-    bodyHtml = (typeof marked !== 'undefined')
+    const html = (typeof marked !== 'undefined')
       ? marked.parse(text)
       : `<pre>${escapeHtml(text)}</pre>`;
+
+    const cursor = streaming ? '<span class="streaming-indicator"></span>' : '';
+    container.innerHTML = `<div class="explanation-content analysis-content">${html}${cursor}</div>`;
   } catch {
-    bodyHtml = `<pre>${escapeHtml(text)}</pre>`;
+    container.innerHTML = `<div class="explanation-content analysis-content"><pre>${escapeHtml(text)}</pre></div>`;
   }
 
-  container.innerHTML = `<div class="email-draft-wrapper">
-    ${toolbar}
-    <div class="email-draft-content analysis-content">${bodyHtml}${cursor}</div>
-  </div>`;
-
   if (streaming) container.scrollTop = container.scrollHeight;
-}
-
-function copyEmailDraft() {
-  if (!emailDraftText) return;
-  navigator.clipboard.writeText(emailDraftText).then(() => {
-    const hint = document.getElementById('emailCopyHint');
-    if (hint) {
-      hint.textContent = '✓ In Zwischenablage kopiert';
-      setTimeout(() => { hint.textContent = ''; }, 2500);
-    }
-    showToast('✅ E-Mail kopiert', 'success');
-  }).catch(() => showToast('Kopieren fehlgeschlagen', 'error'));
 }
 
 // ============================================================
@@ -971,7 +948,7 @@ const EMPTY_STATES = {
   messages: '<div class="empty-state"><div class="empty-icon">📭</div><div>Log parsen um Nachrichten anzuzeigen</div></div>',
   analysis: '<div class="empty-state"><div class="empty-icon">🔬</div><div>„🤖 KI-Analyse" klicken um eine detaillierte Analyse zu erhalten</div></div>',
   issues:   '<div class="empty-state"><div class="empty-icon">✅</div><div>Keine Issues erkannt</div></div>',
-  email:    '<div class="empty-state"><div class="empty-icon">💡</div><div>„💡 Einfache Erklärung" klicken um eine verständliche Zusammenfassung zu erhalten</div></div>',
+  explanation: '<div class="empty-state"><div class="empty-icon">💡</div><div>„💡 Einfache Erklärung" klicken um eine verständliche Zusammenfassung zu erhalten</div></div>',
 };
 
 // ============================================================
@@ -1000,17 +977,17 @@ function markResultsDirty() {
   document.getElementById('tab-messages').innerHTML = EMPTY_STATES.messages;
   document.getElementById('tab-analysis').innerHTML = EMPTY_STATES.analysis;
   document.getElementById('tab-issues').innerHTML   = EMPTY_STATES.issues;
-  document.getElementById('tab-email').innerHTML    = EMPTY_STATES.email;
-  emailDraftText = '';
+  document.getElementById('tab-explanation').innerHTML    = EMPTY_STATES.explanation;
+  explanationText = '';
 
   if (timelineChartInstance) { timelineChartInstance.destroy(); timelineChartInstance = null; }
 
   analyzeBtn.disabled    = false;
   analyzeBtn.textContent = '🤖 KI-Analyse';
   analyzeBtn.title       = '';
-  draftEmailBtn.disabled    = false;
-  draftEmailBtn.textContent = '💡 Einfache Erklärung';
-  draftEmailBtn.title       = '';
+  explanationBtn.disabled    = false;
+  explanationBtn.textContent = '💡 Einfache Erklärung';
+  explanationBtn.title       = '';
 }
 
 function resetResults() {

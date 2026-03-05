@@ -589,15 +589,15 @@ select.filter-input { width: 170px; cursor: pointer; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
-   Email Draft
+   Explanation
    ============================================================ */
-.email-draft-wrapper { display: flex; flex-direction: column; height: 100%; }
-.email-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
-.email-status-hint { font-size: 12px; color: var(--result); font-weight: 500; }
-.email-hint-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px; }
-.email-hint-state .empty-icon { color: var(--border-2); }
-.email-hint-state strong { color: var(--text); }
-.email-draft-content { flex: 1; padding: 20px; white-space: pre-wrap; font-family: var(--font); font-size: 14px; line-height: 1.7; color: var(--text); overflow-y: auto; background: var(--surface); }
+.explanation-wrapper { display: flex; flex-direction: column; height: 100%; }
+.explanation-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
+.explanation-status-hint { font-size: 12px; color: var(--result); font-weight: 500; }
+.explanation-hint-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px; }
+.explanation-hint-state .empty-icon { color: var(--border-2); }
+.explanation-hint-state strong { color: var(--text); }
+.explanation-content { flex: 1; padding: 20px; white-space: pre-wrap; font-family: var(--font); font-size: 14px; line-height: 1.7; color: var(--text); overflow-y: auto; background: var(--surface); }
 
 /* ============================================================
    Resources

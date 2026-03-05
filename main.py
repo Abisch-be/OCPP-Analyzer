@@ -515,8 +515,8 @@ async def search_hardware(vendor: str = "", model: str = "", firmware: str = "",
     return {"results": unique}
 
 
-@app.post("/api/draft-email")
-async def draft_email(request: AnalyzeRequest, _: Annotated[str, Depends(authenticate)]):
+@app.post("/api/explain")
+async def explain(request: AnalyzeRequest, _: Annotated[str, Depends(authenticate)]):
     stats    = request.parsed_data.get("stats", {})
     errors   = request.parsed_data.get("errors", [])
     warnings = request.parsed_data.get("warnings", [])
