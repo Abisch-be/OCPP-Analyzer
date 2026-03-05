@@ -327,22 +327,38 @@ function renderTimelineChart(messages) {
     data: {
       labels: data.labels,
       datasets: [
-        { label: 'OK',        data: data.ok,      backgroundColor: '#22c55e', stack: 'logs' },
-        { label: 'Unvollständig', data: data.warning,  backgroundColor: '#f97316', stack: 'logs' },
-        { label: 'Fehler',    data: data.error,    backgroundColor: '#ef4444', stack: 'logs' },
+        { label: 'OK',            data: data.ok,      backgroundColor: 'rgba(34,197,94,0.85)',  borderRadius: 4, borderSkipped: false, stack: 'logs' },
+        { label: 'Unvollständig', data: data.warning, backgroundColor: 'rgba(249,115,22,0.85)', borderRadius: 4, borderSkipped: false, stack: 'logs' },
+        { label: 'Fehler',        data: data.error,   backgroundColor: 'rgba(239,68,68,0.85)',  borderRadius: 4, borderSkipped: false, stack: 'logs' },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top', labels: { font: { size: 11 }, color: '#7E7E95', boxWidth: 12, padding: 12 } },
-        tooltip: { mode: 'index', intersect: false },
+        legend: {
+          position: 'top',
+          labels: { font: { size: 11, weight: '500' }, color: '#94a3b8', boxWidth: 10, boxHeight: 10, borderRadius: 3, padding: 16, usePointStyle: true, pointStyle: 'circle' },
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: 'rgba(15,23,42,0.9)',
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          borderColor: 'rgba(148,163,184,0.1)',
+          borderWidth: 1,
+          cornerRadius: 8,
+          padding: 10,
+        },
       },
       scales: {
-        x: { stacked: true, ticks: { color: '#7E7E95', font: { size: 10 }, maxRotation: 45 }, grid: { color: 'rgba(0,0,0,0.06)' } },
-        y: { stacked: true, beginAtZero: true, ticks: { color: '#7E7E95', font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } },
+        x: { stacked: true, ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 }, grid: { display: false }, border: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: '#64748b', font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(148,163,184,0.08)' }, border: { display: false } },
       },
+      animation: { duration: 400 },
+      barPercentage: 0.75,
+      categoryPercentage: 0.85,
     },
   });
 }
@@ -381,7 +397,9 @@ function displayMessages(messages) {
         <option value="">Alle Event-Typen</option>
         ${actionOptions}
       </select>
-      <button id="filterErrors" class="filter-toggle" data-active="false">🔴 Nur Fehler</button>
+      <button id="filterOk"      class="filter-toggle" data-active="false">✅ OK</button>
+      <button id="filterWarning" class="filter-toggle" data-active="false">🟠 Unvollständig</button>
+      <button id="filterErrors"  class="filter-toggle" data-active="false">🔴 Fehler</button>
       <span id="filterCount" class="filter-count"></span>
       <button id="filterClear" class="filter-clear" title="Filter zurücksetzen">✕</button>
     </div>
@@ -391,18 +409,22 @@ function displayMessages(messages) {
   renderTimelineChart(messages);
 
   document.getElementById('filterAction').addEventListener('change', renderFilteredPairs);
-  document.getElementById('filterErrors').addEventListener('click', () => {
-    const btn = document.getElementById('filterErrors');
-    const active = btn.dataset.active === 'true';
-    btn.dataset.active = String(!active);
-    btn.classList.toggle('active', !active);
-    renderFilteredPairs();
+  ['filterOk', 'filterWarning', 'filterErrors'].forEach(id => {
+    document.getElementById(id).addEventListener('click', () => {
+      const btn = document.getElementById(id);
+      const active = btn.dataset.active === 'true';
+      btn.dataset.active = String(!active);
+      btn.classList.toggle('active', !active);
+      renderFilteredPairs();
+    });
   });
   document.getElementById('filterClear').addEventListener('click', () => {
     document.getElementById('filterAction').value = '';
-    const btn = document.getElementById('filterErrors');
-    btn.dataset.active = 'false';
-    btn.classList.remove('active');
+    ['filterOk', 'filterWarning', 'filterErrors'].forEach(id => {
+      const btn = document.getElementById(id);
+      btn.dataset.active = 'false';
+      btn.classList.remove('active');
+    });
     renderFilteredPairs();
   });
 
@@ -413,15 +435,24 @@ function renderFilteredPairs() {
   const list = document.getElementById('msg-list');
   if (!list) return;
 
-  const fromVal    = document.getElementById('filterFrom')?.value ?? '';
-  const toVal      = document.getElementById('filterTo')?.value   ?? '';
-  const actionVal  = document.getElementById('filterAction')?.value ?? '';
-  const errorsOnly = document.getElementById('filterErrors')?.dataset.active === 'true';
+  const fromVal      = document.getElementById('filterFrom')?.value ?? '';
+  const toVal        = document.getElementById('filterTo')?.value   ?? '';
+  const actionVal    = document.getElementById('filterAction')?.value ?? '';
+  const showOk       = document.getElementById('filterOk')?.dataset.active === 'true';
+  const showWarning  = document.getElementById('filterWarning')?.dataset.active === 'true';
+  const showErrors   = document.getElementById('filterErrors')?.dataset.active === 'true';
+  const anyActive    = showOk || showWarning || showErrors;
 
   const filtered = allPairs.filter(({ call, response, isError }) => {
     const unanswered = call && !response;
+    const isOk = !isError && !unanswered;
 
-    if (errorsOnly && !isError && !unanswered) return false;
+    if (anyActive) {
+      if (showErrors && isError) { /* include */ }
+      else if (showWarning && unanswered) { /* include */ }
+      else if (showOk && isOk) { /* include */ }
+      else return false;
+    }
     if (actionVal && call?.action !== actionVal) return false;
     if (fromVal || toVal) {
       const ts = (call?.timestamp ?? response?.timestamp ?? '').substring(0, 16);
