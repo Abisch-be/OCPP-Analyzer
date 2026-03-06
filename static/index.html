@@ -121,16 +121,16 @@
       <div class="output-col">
 
         <div class="tabs output-tabs">
-          <button class="tab active" id="tab-issues">
+          <button class="tab active" data-tab="issues">
             Issues
-            <span class="tab-badge" id="issuesBadge"></span>
+            <span class="tab-badge hidden" id="issuesBadge"></span>
           </button>
-          <button class="tab" id="tab-messages">Nachrichten</button>
-          <button class="tab" id="tab-analysis">KI-Analyse</button>
-          <button class="tab" id="tab-explanation">Zusammenfassung</button>
+          <button class="tab" data-tab="messages">Nachrichten</button>
+          <button class="tab" data-tab="analysis">KI-Analyse</button>
+          <button class="tab" data-tab="explanation">Zusammenfassung</button>
         </div>
 
-        <div class="tab-content active output-pane" id="content-issues">
+        <div class="tab-content active output-pane" id="tab-issues">
           <div class="empty-state">
             <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -142,7 +142,7 @@
           </div>
         </div>
 
-        <div class="tab-content hidden output-pane" id="content-messages">
+        <div class="tab-content hidden output-pane" id="tab-messages">
           <div class="empty-state">
             <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -152,7 +152,7 @@
           </div>
         </div>
 
-        <div class="tab-content hidden output-pane" id="content-analysis">
+        <div class="tab-content hidden output-pane" id="tab-analysis">
           <div class="empty-state">
             <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
@@ -162,7 +162,7 @@
           </div>
         </div>
 
-        <div class="tab-content hidden output-pane" id="content-explanation">
+        <div class="tab-content hidden output-pane" id="tab-explanation">
           <div class="empty-state">
             <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -176,7 +176,7 @@
   </div>
 
   <div id="toastContainer" class="toast-container"></div>
-  <div id="ocppTooltip" class="ocpp-tooltip" style="display:none">
+  <div id="ocppTooltip" class="ocpp-tooltip hidden">
     <div class="ocpp-tooltip-title"></div>
     <div class="ocpp-tooltip-body"></div>
   </div>
