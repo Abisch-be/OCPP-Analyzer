@@ -886,7 +886,7 @@ html, body {
 .pair-request { background: var(--panel); }
 
 .pair-action-name {
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.2px;
