@@ -972,8 +972,8 @@ html, body {
   border: 1px solid var(--line);
   flex-shrink: 0;
 }
-.pair-ts-date { color: var(--ink-4); }
-.pair-ts-time { color: var(--ink-3); }
+.pair-ts-date { color: var(--ink-2); }
+.pair-ts-time { color: var(--ink-2); }
 
 .pair-no-response {
   padding: 8px 14px;
