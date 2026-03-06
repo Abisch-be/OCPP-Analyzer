@@ -154,12 +154,72 @@ html, body {
   color: var(--ink);
 }
 .icon-btn { padding: 5px 8px; }
-.danger-btn:hover {
-  background: var(--red-dim);
-  border-color: var(--red-border);
-  color: var(--red);
-}
 .file-input-hidden { display: none; }
+
+/* ── Log toolbar (upload + example) ── */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-shrink: 0;
+}
+.log-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--t), border-color var(--t), color var(--t);
+  user-select: none;
+}
+.log-tool-btn:hover {
+  background: var(--bg);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+/* ── Floating clear button ── */
+.clear-fab {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px;
+  background: var(--red);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(217,48,37,0.4);
+  transition: opacity var(--t), transform var(--t) var(--ease), box-shadow var(--t);
+  user-select: none;
+}
+.clear-fab:hover {
+  opacity: 0.92;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(217,48,37,0.5);
+}
+.clear-fab:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 12px rgba(217,48,37,0.4);
+}
 
 /* ── Settings ───────────────────────────────────────────── */
 .settings-bar {
@@ -312,12 +372,17 @@ html, body {
 /* ── Action bar ─────────────────────────────────────────── */
 .action-footer {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   padding: 14px 20px;
   background: var(--panel-2);
   border-top: 1px solid var(--line);
   flex-shrink: 0;
+}
+.action-full {
+  width: 100%;
+  flex: none;
+  justify-content: center;
 }
 
 .action-primary {
