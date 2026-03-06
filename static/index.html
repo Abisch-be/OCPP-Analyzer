@@ -39,14 +39,32 @@
     <!-- ── Settings ────────────────────────────────────────── -->
     <div id="settingsPanel" class="settings-bar hidden">
       <div class="settings-inner">
-        <label class="settings-label" for="ollamaUrl">Ollama URL</label>
-        <input id="ollamaUrl" type="text" class="settings-input" value="http://localhost:11434">
-        <label class="settings-label" for="modelSelect">Modell</label>
-        <select id="modelSelect" class="settings-select">
-          <option value="">Kein Modell geladen</option>
-        </select>
-        <button id="loadModelsBtn" class="settings-load">Modelle laden</button>
-        <span id="modelsStatus" class="settings-status"></span>
+        <div class="settings-row">
+          <label class="settings-label" for="ollamaUrl">Ollama URL</label>
+          <input id="ollamaUrl" type="text" class="settings-input" value="http://localhost:11434">
+          <label class="settings-label" for="modelSelect">Modell</label>
+          <select id="modelSelect" class="settings-select">
+            <option value="">Kein Modell geladen</option>
+          </select>
+          <button id="loadModelsBtn" class="settings-load">Modelle laden</button>
+          <span id="modelsStatus" class="settings-status"></span>
+        </div>
+        <div class="settings-prompts">
+          <div class="settings-prompt-block">
+            <div class="settings-prompt-header">
+              <span class="settings-label">KI-Analyse Prompt</span>
+              <button id="resetAnalyzePrompt" class="settings-reset-btn">Zurücksetzen</button>
+            </div>
+            <textarea id="analyzePrompt" class="settings-prompt-textarea" rows="5" spellcheck="false"></textarea>
+          </div>
+          <div class="settings-prompt-block">
+            <div class="settings-prompt-header">
+              <span class="settings-label">Zusammenfassung Prompt</span>
+              <button id="resetExplainPrompt" class="settings-reset-btn">Zurücksetzen</button>
+            </div>
+            <textarea id="explainPrompt" class="settings-prompt-textarea" rows="5" spellcheck="false"></textarea>
+          </div>
+        </div>
       </div>
     </div>
 

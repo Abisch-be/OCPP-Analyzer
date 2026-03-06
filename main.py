@@ -79,6 +79,7 @@ class AnalyzeRequest(BaseModel):
     ollama_url: str
     model: str
     customer_context: str = ""
+    system_prompt: str | None = None
 
 
 def is_table_format(log_content: str) -> bool:
@@ -448,7 +449,10 @@ async def analyze_logs(request: AnalyzeRequest, _: Annotated[str, Depends(authen
     else:
         context_directive = ""
 
-    system_prompt = f"""Du bist ein OCPP 1.6 Experte und Spezialist für Ladeinfrastruktur-Kommunikation.
+    if request.system_prompt and request.system_prompt.strip():
+        system_prompt = request.system_prompt.strip() + context_directive
+    else:
+        system_prompt = f"""Du bist ein OCPP 1.6 Experte und Spezialist für Ladeinfrastruktur-Kommunikation.
 Analysiere die bereitgestellten OCPP-Logs und erstelle eine strukturierte Fehlerdiagnose auf Deutsch.{context_directive}
 
 Deine Analyse muss folgende Abschnitte enthalten:
@@ -566,7 +570,19 @@ async def explain(request: AnalyzeRequest, _: Annotated[str, Depends(authenticat
         else request.log_content
     )
 
-    system_prompt = """Du bist ein Assistent für Hotline- und Service-Mitarbeiter im Bereich Elektromobilität.
+    context_directive = ""
+    if request.customer_context.strip():
+        context_directive = (
+            f"\n\nPRIMÄRER FOKUS: Deine Erklärung muss direkt und konkret auf das gemeldete Problem "
+            f"'{request.customer_context.strip()}' eingehen. "
+            f"Beantworte: Bestätigt der Log dieses Problem? Wann genau ist es aufgetreten? Was war die Ursache? "
+            f"Alles andere (normale Abläufe etc.) ist nachrangig – das gemeldete Problem steht im Mittelpunkt."
+        )
+
+    if request.system_prompt and request.system_prompt.strip():
+        system_prompt = request.system_prompt.strip() + context_directive
+    else:
+        system_prompt = """Du bist ein Assistent für Hotline- und Service-Mitarbeiter im Bereich Elektromobilität.
 Deine Aufgabe: Erstelle eine strukturierte, verständliche Erklärung für Service-Mitarbeiter.
 
 Ausgabeformat – verwende Markdown mit exakt diesen Abschnitten (Reihenfolge einhalten):
@@ -589,16 +605,7 @@ Allgemeine Regeln:
   (z.B. "CALLERROR" → "Fehlermeldung", "BootNotification" → "Einschalten der Ladestation",
    "StatusNotification" → "Statusmeldung", "Heartbeat" → "regelmäßiges Lebenszeichen")
 - Verwende NIEMALS relative Zeitangaben – immer das tatsächliche Datum/Uhrzeit aus dem Log
-- Kein E-Mail-Format, keine Begrüßung, keine Grußformel"""
-
-    context_directive = ""
-    if request.customer_context.strip():
-        context_directive = (
-            f"\n\nPRIMÄRER FOKUS: Deine Erklärung muss direkt und konkret auf das gemeldete Problem "
-            f"'{request.customer_context.strip()}' eingehen. "
-            f"Beantworte: Bestätigt der Log dieses Problem? Wann genau ist es aufgetreten? Was war die Ursache? "
-            f"Alles andere (normale Abläufe etc.) ist nachrangig – das gemeldete Problem steht im Mittelpunkt."
-        )
+- Kein E-Mail-Format, keine Begrüßung, keine Grußformel""" + context_directive
 
     user_prompt = f"""Erstelle eine Erklärung für Hotline-/Service-Mitarbeiter zur folgenden Situation:
 

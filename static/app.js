@@ -33,6 +33,47 @@ const issuesBadge     = document.getElementById('issuesBadge');
 const toastContainer  = document.getElementById('toastContainer');
 const customerContext = document.getElementById('customerContext');
 const explanationBtn   = document.getElementById('explanationBtn');
+const analyzePrompt      = document.getElementById('analyzePrompt');
+const explainPrompt      = document.getElementById('explainPrompt');
+const resetAnalyzePrompt = document.getElementById('resetAnalyzePrompt');
+const resetExplainPrompt = document.getElementById('resetExplainPrompt');
+
+const DEFAULT_ANALYZE_PROMPT = `Du bist ein OCPP 1.6 Experte und Spezialist für Ladeinfrastruktur-Kommunikation.
+Analysiere die bereitgestellten OCPP-Logs und erstelle eine strukturierte Fehlerdiagnose auf Deutsch.
+
+Deine Analyse muss folgende Abschnitte enthalten:
+1. **Zusammenfassung** - Kurzer Überblick über den Log-Inhalt und Kommunikationsfluss
+2. **Kritische Fehler** - Alle CALLERROR-Nachrichten und schwerwiegenden Probleme mit Ursachenanalyse
+3. **Warnungen** - Nicht-kritische Auffälligkeiten und potenzielle Probleme
+4. **Protokoll-Compliance** - Einhaltung des OCPP 1.6 Standards (Nachrichtenreihenfolge, Pflichtfelder, etc.)
+5. **Lösungsvorschläge** - Konkrete, priorisierte Schritte zur Behebung der gefundenen Fehler
+6. **Best Practices** - Empfehlungen für eine robustere OCPP-Implementierung
+7. **Prioritätenliste** - Nach Dringlichkeit sortierte Maßnahmenliste (KRITISCH / WICHTIG / OPTIONAL)`;
+
+const DEFAULT_EXPLAIN_PROMPT = `Du bist ein Assistent für Hotline- und Service-Mitarbeiter im Bereich Elektromobilität.
+Deine Aufgabe: Erstelle eine strukturierte, verständliche Erklärung für Service-Mitarbeiter.
+
+Ausgabeformat – verwende Markdown mit exakt diesen Abschnitten (Reihenfolge einhalten):
+
+## Was ist passiert?
+Kurze Zusammenfassung der Situation in 2–4 Sätzen. Konkretes Datum und Uhrzeit aus dem Log nennen.
+
+## Erkannte Probleme
+Aufzählung der Fehler und Warnungen in Alltagssprache. Falls keine Fehler: kurz beschreiben, dass alles normal aussieht.
+
+## Was bedeutet das für den Nutzer?
+Erklärung der Auswirkungen auf den Ladevorgang in einfacher Sprache.
+
+## Nächste Schritte
+Konkrete, priorisierte Handlungsempfehlungen um die Ladestation wieder betriebsbereit zu machen. Als nummerierte Liste.
+
+Allgemeine Regeln:
+- Schreibe auf Deutsch, sachlich und verständlich
+- Keine Fachbegriffe – übersetze OCPP-Konzepte in Alltagssprache
+  (z.B. "CALLERROR" → "Fehlermeldung", "BootNotification" → "Einschalten der Ladestation",
+   "StatusNotification" → "Statusmeldung", "Heartbeat" → "regelmäßiges Lebenszeichen")
+- Verwende NIEMALS relative Zeitangaben – immer das tatsächliche Datum/Uhrzeit aus dem Log
+- Kein E-Mail-Format, keine Begrüßung, keine Grußformel`;
 
 // --- Initialization ---
 window.addEventListener('DOMContentLoaded', () => {
@@ -56,11 +97,15 @@ function loadSettings() {
     opt.selected = true;
     modelSelect.appendChild(opt);
   }
+  analyzePrompt.value = localStorage.getItem('analyze_prompt') || DEFAULT_ANALYZE_PROMPT;
+  explainPrompt.value = localStorage.getItem('explain_prompt') || DEFAULT_EXPLAIN_PROMPT;
 }
 
 function saveSettings() {
   localStorage.setItem('ollama_url', ollamaUrl.value.trim());
   if (modelSelect.value) localStorage.setItem('ollama_model', modelSelect.value);
+  localStorage.setItem('analyze_prompt', analyzePrompt.value);
+  localStorage.setItem('explain_prompt', explainPrompt.value);
 }
 
 // ============================================================
@@ -93,6 +138,11 @@ function setupEventListeners() {
 
   ollamaUrl.addEventListener('change', saveSettings);
   modelSelect.addEventListener('change', saveSettings);
+
+  resetAnalyzePrompt.addEventListener('click', () => { analyzePrompt.value = DEFAULT_ANALYZE_PROMPT; saveSettings(); });
+  resetExplainPrompt.addEventListener('click', () => { explainPrompt.value = DEFAULT_EXPLAIN_PROMPT; saveSettings(); });
+  analyzePrompt.addEventListener('change', saveSettings);
+  explainPrompt.addEventListener('change', saveSettings);
 
   fileInput.addEventListener('change', (e) => {
     if (e.target.files[0]) handleFileUpload(e.target.files[0]);
@@ -766,6 +816,7 @@ async function analyzeLogs() {
         ollama_url: url,
         model: model,
         customer_context: customerContext ? customerContext.value.trim() : '',
+        system_prompt: analyzePrompt.value.trim(),
       }),
     });
 
@@ -979,6 +1030,7 @@ async function draftExplanation() {
         ollama_url: url,
         model: model,
         customer_context: customerContext ? customerContext.value.trim() : '',
+        system_prompt: explainPrompt.value.trim(),
       }),
     });
 
