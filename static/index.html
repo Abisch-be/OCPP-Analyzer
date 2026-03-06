@@ -1,186 +1,186 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OCPP Log Analyzer · Vaylens</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/style-vaylens.css" />
-  </head>
-  <body>
-    <header class="header">
-      <div class="header-logo">
-        <span class="logo-ocpp">OCPP</span>
-        <span class="logo-analyzer">Analyzer</span>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OCPP Analyzer · Diagnostic Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style-premium.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <div class="shell">
+
+    <!-- ── Header ─────────────────────────────────────────── -->
+    <header class="site-header">
+      <div class="header-left">
+        <div class="wordmark">
+          <span class="wordmark-ocpp">OCPP</span>
+          <span class="wordmark-analyzer">Analyzer</span>
+        </div>
+        <div class="header-divider"></div>
+        <span class="header-descriptor">OCPP 1.6 Diagnostic Suite</span>
       </div>
-      <div class="header-right">
-        <span class="header-tag">OCPP 1.6 Diagnostic Tool</span>
-      </div>
+
+      <nav class="header-right">
+        <input type="file" id="fileInput" class="file-input-hidden" accept=".txt,.log">
+        <label for="fileInput" class="ghost-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Log hochladen
+        </label>
+        <button class="ghost-btn" id="exampleBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Beispiel
+        </button>
+        <button class="ghost-btn icon-btn" id="settingsToggle" aria-label="Einstellungen">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+        </button>
+        <button class="ghost-btn icon-btn danger-btn" id="clearBtn" aria-label="Leeren">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </nav>
     </header>
 
-    <div id="settingsPanel" class="settings-panel hidden">
+    <!-- ── Settings ────────────────────────────────────────── -->
+    <div id="settingsPanel" class="settings-bar hidden">
       <div class="settings-inner">
-        <div class="settings-group">
-          <label class="settings-label" for="ollamaUrl">Ollama URL</label>
-          <input id="ollamaUrl" type="text" class="input" placeholder="http://your-vps:11434" value="http://localhost:11434" />
-        </div>
-        <div class="settings-group">
-          <label class="settings-label" for="modelSelect">KI-Modell</label>
-          <select id="modelSelect" class="select">
-            <option value="">— Modelle laden —</option>
-          </select>
-        </div>
-        <button id="loadModelsBtn" class="btn btn-secondary">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          Modelle laden
-        </button>
-        <span id="modelsStatus" class="status-text"></span>
+        <label class="settings-label" for="ollamaUrl">Ollama URL</label>
+        <input id="ollamaUrl" type="text" class="settings-input" value="http://localhost:11434">
+        <label class="settings-label" for="modelSelect">Modell</label>
+        <select id="modelSelect" class="settings-select">
+          <option value="">Kein Modell geladen</option>
+        </select>
+        <button id="loadModelsBtn" class="settings-load">Modelle laden</button>
+        <span id="modelsStatus" class="settings-status"></span>
       </div>
     </div>
 
-    <main class="main-grid">
-      <!-- Left Panel -->
-      <div class="panel left-panel">
-        <div class="panel-section-header">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-          Log Eingabe
-          <div class="toolbar-actions">
-            <label class="btn-icon" for="fileInput" title="Datei öffnen">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            </label>
-            <input id="fileInput" type="file" class="file-input-hidden" accept=".log,.txt,.json" />
-            <button id="exampleBtn" class="btn-icon" title="Beispiel laden">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            </button>
-            <button id="settingsToggle" class="btn-icon" title="KI-Einstellungen">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            </button>
-            <button id="clearBtn" class="btn-icon btn-icon-danger" title="Log leeren">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </div>
-        </div>
+    <!-- ── Workspace ────────────────────────────────────────── -->
+    <main class="workspace">
 
-        <div class="context-section">
-          <label class="context-label">
-            Kundenkontext
-            <span class="context-hint">optional</span>
-          </label>
+      <!-- Input column -->
+      <aside class="input-col">
+
+        <div class="input-section">
+          <label class="section-eyebrow">Kundenmeldung <span class="optional-tag">optional</span></label>
           <textarea
             id="customerContext"
-            class="context-textarea"
-            rows="3"
+            class="field-textarea"
             maxlength="500"
-            placeholder="Gemeldetes Problem beschreiben, z.B. Ladeabbrüche nach 5 Min, kein Ladestart mit RFID..."
-            spellcheck="true"
-          ></textarea>
+            rows="4"
+            placeholder="Schildern Sie das gemeldete Problem — gibt dem KI-Modell wichtigen Kontext."></textarea>
         </div>
 
-        <div class="context-section log-section">
-          <label class="context-label" for="logInput">OCPP Log</label>
+        <div class="input-section input-section-fill">
+          <div class="log-header">
+            <label class="section-eyebrow">OCPP Log</label>
+            <span class="log-counter"><span id="charCount">0</span>&thinsp;Z · <span id="lineCount">0</span>&thinsp;L</span>
+          </div>
           <textarea
             id="logInput"
-            class="log-textarea"
-            placeholder='OCPP 1.6 Log hier einfügen oder Datei ablegen...&#10;&#10;Format: [2,"id","Action",{...}]'
-            spellcheck="false"
-          ></textarea>
+            class="field-textarea log-textarea"
+            placeholder="Logs hier einfügen oder Datei hochladen …&#10;&#10;[2, &quot;u01&quot;, &quot;BootNotification&quot;, {…}]&#10;[3, &quot;u01&quot;, {&quot;status&quot;: &quot;Accepted&quot;, …}]"></textarea>
         </div>
 
-        <div class="char-count">
-          <span id="charCount">0</span> Zeichen
-          <span class="sep">·</span>
-          <span id="lineCount">0</span> Zeilen
-        </div>
-
-        <div class="actions">
-          <button id="parseBtn" class="btn btn-secondary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Parsen
+        <div class="action-footer">
+          <button id="parseBtn" class="action-secondary">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Parse
           </button>
-          <button id="analyzeBtn" class="btn btn-primary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4l2 2"/><path d="M18 2l3 3-3 3"/><path d="M21 2v3h-3"/></svg>
-            KI-Analyse
+          <button id="analyzeBtn" class="action-primary">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            KI-Analyse starten
           </button>
-          <button id="explanationBtn" class="btn btn-secondary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Zusammenfassung
+          <button id="explanationBtn" class="action-secondary">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Erklärung
           </button>
         </div>
-      </div>
+      </aside>
 
-      <!-- Right Panel -->
-      <div class="panel right-panel">
-        <div class="tabs">
-          <button class="tab active" data-tab="issues">
-            Probleme
-            <span id="issuesBadge" class="tab-badge hidden">0</span>
+      <!-- Output column -->
+      <div class="output-col">
+
+        <div class="tabs output-tabs">
+          <button class="tab active" id="tab-issues">
+            Issues
+            <span class="tab-badge" id="issuesBadge"></span>
           </button>
-          <button class="tab" data-tab="messages">Nachrichten</button>
-          <button class="tab" data-tab="analysis">KI-Analyse</button>
-          <button class="tab" data-tab="explanation">Zusammenfassung</button>
+          <button class="tab" id="tab-messages">Nachrichten</button>
+          <button class="tab" id="tab-analysis">KI-Analyse</button>
+          <button class="tab" id="tab-explanation">Zusammenfassung</button>
         </div>
 
-        <div id="tab-issues" class="tab-content active">
+        <div class="tab-content active output-pane" id="content-issues">
           <div class="empty-state">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                <polyline points="22 4 12 14.01 9 11.01"/>
-              </svg>
-            </div>
-            <div class="empty-title">Keine Probleme erkannt</div>
-            <div class="empty-sub">Füge ein OCPP Log ein und klicke „Parsen"</div>
+            <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <p class="empty-title">Keine Issues erkannt</p>
+            <p class="empty-sub">Führe Parse aus um Fehler und Warnungen zu erkennen</p>
           </div>
         </div>
-        <div id="tab-messages" class="tab-content hidden">
+
+        <div class="tab-content hidden output-pane" id="content-messages">
           <div class="empty-state">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </div>
-            <div class="empty-title">Keine Nachrichten</div>
-            <div class="empty-sub">Log parsen um OCPP-Nachrichten anzuzeigen</div>
+            <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <p class="empty-title">Keine Nachrichten</p>
+            <p class="empty-sub">Parse den Log um den OCPP-Nachrichtenfluss zu sehen</p>
           </div>
         </div>
-        <div id="tab-analysis" class="tab-content hidden">
+
+        <div class="tab-content hidden output-pane" id="content-analysis">
           <div class="empty-state">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-            </div>
-            <div class="empty-title">Keine Analyse vorhanden</div>
-            <div class="empty-sub">„KI-Analyse" klicken um zu starten</div>
+            <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <p class="empty-title">KI-Analyse bereit</p>
+            <p class="empty-sub">Log parsen, dann KI-Analyse für detaillierte Diagnose starten</p>
           </div>
         </div>
-        <div id="tab-explanation" class="tab-content hidden">
+
+        <div class="tab-content hidden output-pane" id="content-explanation">
           <div class="empty-state">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-            </div>
-            <div class="empty-title">Keine Zusammenfassung vorhanden</div>
-            <div class="empty-sub">„Zusammenfassung" klicken um zu generieren</div>
+            <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <p class="empty-title">Noch keine Zusammenfassung</p>
+            <p class="empty-sub">Erklärung in verständlicher Sprache für Service-Mitarbeiter</p>
           </div>
         </div>
       </div>
     </main>
+  </div>
 
-    <div id="toastContainer" class="toast-container"></div>
-    <div id="ocppTooltip" class="ocpp-tooltip hidden">
-      <div class="ocpp-tooltip-title"></div>
-      <div class="ocpp-tooltip-body"></div>
-    </div>
+  <div id="toastContainer" class="toast-container"></div>
+  <div id="ocppTooltip" class="ocpp-tooltip" style="display:none">
+    <div class="ocpp-tooltip-title"></div>
+    <div class="ocpp-tooltip-body"></div>
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-    <script src="/static/app.js"></script>
-  </body>
+  <script src="app.js"></script>
+</body>
 </html>
