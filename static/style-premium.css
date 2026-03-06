@@ -936,8 +936,24 @@ html, body {
   border-color: var(--line-strong);
   box-shadow: 0 2px 8px rgba(25,24,26,0.06);
 }
-.msg-pair.has-error { border-color: var(--red-border); background: var(--red-dim); }
-.msg-pair.incomplete { border-color: var(--amber-border); }
+.msg-pair.has-error {
+  border-color: var(--red);
+  background: rgba(217,48,37,0.06);
+  box-shadow: inset 4px 0 0 var(--red);
+}
+.msg-pair.has-error:hover {
+  border-color: var(--red);
+  box-shadow: inset 4px 0 0 var(--red), 0 2px 8px rgba(217,48,37,0.15);
+}
+.msg-pair.unanswered {
+  border-color: var(--amber);
+  background: rgba(217,119,6,0.06);
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+.msg-pair.unanswered:hover {
+  border-color: var(--amber);
+  box-shadow: inset 4px 0 0 var(--amber), 0 2px 8px rgba(217,119,6,0.15);
+}
 
 .pair-row {
   display: flex;
