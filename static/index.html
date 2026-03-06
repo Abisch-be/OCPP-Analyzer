@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OCPP Log Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <!-- Header -->
+    <header class="header">
+      <div class="header-logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">OCPP 1.6 Log Analyzer</span>
+      </div>
+      <button id="settingsToggle" class="btn btn-ghost" title="Einstellungen">
+        <span class="btn-icon">⚙️</span> Einstellungen
+      </button>
+    </header>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-inner">
+        <div class="settings-group">
+          <label class="settings-label" for="ollamaUrl">Ollama URL</label>
+          <input
+            id="ollamaUrl"
+            type="text"
+            class="input"
+            placeholder="http://your-vps:11434"
+            value="http://localhost:11434"
+          />
+        </div>
+        <div class="settings-group">
+          <label class="settings-label" for="modelSelect">Modell</label>
+          <select id="modelSelect" class="select">
+            <option value="">-- Modelle laden --</option>
+          </select>
+        </div>
+        <button id="loadModelsBtn" class="btn btn-secondary">
+          🔄 Modelle laden
+        </button>
+        <span id="modelsStatus" class="status-text"></span>
+      </div>
+    </div>
+
+    <!-- Main Grid -->
+    <main class="main-grid">
+      <!-- Left Panel: Log Input -->
+      <div class="panel left-panel">
+        <div class="panel-header">
+          <span class="panel-icon">📄</span>
+          <span>LOG-EINGABE</span>
+        </div>
+
+        <!-- Drop Zone -->
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-zone-content">
+            <div class="drop-zone-icon">📂</div>
+            <div class="drop-zone-text">Log-Datei hier ablegen</div>
+            <div class="drop-zone-sub">oder Datei auswählen</div>
+          </div>
+          <input
+            id="fileInput"
+            type="file"
+            class="file-input"
+            accept=".log,.txt,.json"
+          />
+        </div>
+
+        <!-- Textarea -->
+        <textarea
+          id="logInput"
+          class="log-textarea"
+          placeholder='OCPP 1.6 Log hier einfügen oder Datei ablegen...&#10;&#10;Format: [2,"id","Action",{...}]'
+          spellcheck="false"
+        ></textarea>
+
+        <!-- Kundenkontext -->
+        <div class="context-group">
+          <label class="context-label" for="customerContext">
+            🗣️ Kundenkontext <span class="context-hint">(optional)</span>
+          </label>
+          <textarea
+            id="customerContext"
+            class="context-textarea"
+            rows="6"
+            maxlength="500"
+            placeholder="Gemeldetes Problem beschreiben, z.B.:&#10;• Kunde meldet Ladeabbrüche nach ca. 5 Minuten&#10;• Keine Ladeleistung trotz Verbindung&#10;• Fehler beim Ladestart mit RFID-Karte"
+            spellcheck="true"
+          ></textarea>
+        </div>
+
+        <!-- Char Count -->
+        <div class="char-count">
+          <span id="charCount">0</span> Zeichen
+          <span class="sep">|</span>
+          <span id="lineCount">0</span> Zeilen
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+          <button id="parseBtn" class="btn btn-primary">🔍 Lokal parsen</button>
+          <button id="analyzeBtn" class="btn btn-accent">🤖 KI-Analyse</button>
+          <button id="exampleBtn" class="btn btn-ghost">
+            📋 Beispiel laden
+          </button>
+          <button
+            id="clearBtn"
+            class="btn btn-ghost btn-icon-only"
+            title="Log leeren"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Panel: Results -->
+      <div class="panel right-panel">
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+          <span class="stat-label">📊</span>
+          <span id="statTotal" class="stat-badge stat-total">0 Gesamt</span>
+          <span id="statCalls" class="stat-badge stat-call">0 CALL</span>
+          <span id="statResults" class="stat-badge stat-result">0 RES</span>
+          <span id="statErrors" class="stat-badge stat-error">0 ERR</span>
+          <span id="statWarnings" class="stat-badge stat-warning">0 WARN</span>
+          <button
+            id="resetBtn"
+            class="btn btn-ghost btn-reset"
+            title="Ergebnisse zurücksetzen"
+          >
+            ↺ Reset
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" data-tab="messages">💬 Nachrichten</button>
+          <button class="tab" data-tab="analysis">🤖 KI-Analyse</button>
+          <button class="tab" data-tab="issues">
+            🚨 Issues
+            <span id="issuesBadge" class="tab-badge hidden">0</span>
+          </button>
+          <button class="tab" data-tab="resources">📚 Ressourcen</button>
+        </div>
+
+        <!-- Tab: Messages -->
+        <div id="tab-messages" class="tab-content active">
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <div>Log parsen um Nachrichten anzuzeigen</div>
+          </div>
+        </div>
+
+        <!-- Tab: AI Analysis -->
+        <div id="tab-analysis" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">🤖</div>
+            <div>KI-Analyse starten um Ergebnisse zu sehen</div>
+          </div>
+        </div>
+
+        <!-- Tab: Issues -->
+        <div id="tab-issues" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">✅</div>
+            <div>Keine Issues erkannt</div>
+          </div>
+        </div>
+
+        <!-- Tab: Resources -->
+        <div id="tab-resources" class="tab-content hidden">
+          <div class="empty-state">
+            <div class="empty-icon">📚</div>
+            <div>Log parsen um Hardware-Info anzuzeigen</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
