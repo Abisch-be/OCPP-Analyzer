@@ -876,8 +876,8 @@ html, body {
 
 .pair-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--line-soft);
   font-size: 13px;
@@ -886,10 +886,10 @@ html, body {
 .pair-request { background: var(--panel); }
 
 .pair-action-name {
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.2px;
-  flex: 1;
 }
 .pair-action-name.has-ocpp-desc {
   cursor: help;
@@ -900,11 +900,24 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
-  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .pair-row-arrow { color: var(--ink-4); font-size: 12px; }
 .pair-row-type  { font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+
+.pair-row > pre {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 7px 10px;
+  margin-top: 2px;
+}
 
 .msg-line {
   font-family: var(--mono);
@@ -921,12 +934,12 @@ html, body {
   border-radius: 4px;
   flex-shrink: 0;
 }
-.direction-badge.send {
+.direction-badge.dir-SEND {
   background: var(--green-dim);
   color: var(--green);
   border: 1px solid var(--green-border);
 }
-.direction-badge.recv {
+.direction-badge.dir-RECV {
   background: var(--blue-dim);
   color: var(--blue);
   border: 1px solid var(--blue-border);
