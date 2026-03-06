@@ -903,7 +903,18 @@ html, body {
   flex-wrap: wrap;
 }
 .pair-row-arrow { color: var(--ink-4); font-size: 12px; }
-.pair-row-type  { font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+.pair-row-type {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--panel-2);
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+}
 
 .pair-row > pre {
   font-family: var(--mono);
