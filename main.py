@@ -6,9 +6,10 @@ import hmac
 import hashlib
 import base64
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional
+
+import aiomysql
 
 from fastapi import FastAPI, HTTPException, Depends, Request, Response
 from fastapi.staticfiles import StaticFiles
@@ -47,11 +48,25 @@ _BACKEND_INITIATED_ACTIONS = frozenset({
 })
 
 # ── Data layer ────────────────────────────────────────────────
-# /tmp is writable on both Vercel serverless and Docker containers.
-# For Docker with persistent storage mount ./data:/tmp/ocpp-data.
-DATA_DIR      = Path(os.getenv("DATA_DIR", "/tmp/ocpp-data"))
-USERS_FILE    = DATA_DIR / "users.json"
-SETTINGS_FILE = DATA_DIR / "settings.json"
+_DB_HOST = os.getenv("DB_HOST", "localhost")
+_DB_PORT = int(os.getenv("DB_PORT", "3306"))
+_DB_USER = os.getenv("DB_USER", "root")
+_DB_PASS = os.getenv("DB_PASSWORD", "")
+_DB_NAME = os.getenv("DB_NAME", "ocpp_analyzer")
+
+_db_pool: aiomysql.Pool | None = None
+
+
+async def _get_db_pool() -> aiomysql.Pool:
+    global _db_pool
+    if _db_pool is None:
+        _db_pool = await aiomysql.create_pool(
+            host=_DB_HOST, port=_DB_PORT,
+            user=_DB_USER, password=_DB_PASS, db=_DB_NAME,
+            charset="utf8mb4", autocommit=False,
+            minsize=1, maxsize=3,
+        )
+    return _db_pool
 
 SESSION_TTL_HOURS = 8
 # Stateless signed tokens – work across serverless instances, no shared state needed.
@@ -94,41 +109,90 @@ _DEFAULT_SETTINGS = {
 }
 
 
-def _initialize_data():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if not USERS_FILE.exists():
-        username = os.getenv("OCPP_USERNAME", "admin")
-        password = os.getenv("OCPP_PASSWORD", "changeme")
-        users_data = {"users": [{
-            "username": username,
-            "password_hash": _hash_password(password),
-            "role": "admin",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "created_by": "system",
-        }]}
-        USERS_FILE.write_text(json.dumps(users_data, indent=2, ensure_ascii=False))
-        print(f"[startup] Admin user '{username}' created from env vars. "
-              "OCPP_USERNAME/OCPP_PASSWORD are no longer used after first boot.")
-    if not SETTINGS_FILE.exists():
-        SETTINGS_FILE.write_text(json.dumps(_DEFAULT_SETTINGS, indent=2, ensure_ascii=False))
+async def _initialize_db():
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    id INT PRIMARY KEY DEFAULT 1,
+                    ollama_url VARCHAR(512) NOT NULL DEFAULT 'http://localhost:11434',
+                    default_model VARCHAR(256) NOT NULL DEFAULT '',
+                    analyze_prompt MEDIUMTEXT NOT NULL DEFAULT '',
+                    explain_prompt MEDIUMTEXT NOT NULL DEFAULT ''
+                ) CHARACTER SET utf8mb4
+            """)
+            await cur.execute("""
+                INSERT IGNORE INTO settings (id) VALUES (1)
+            """)
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    username VARCHAR(64) PRIMARY KEY,
+                    password_hash TEXT NOT NULL,
+                    role VARCHAR(16) NOT NULL DEFAULT 'user',
+                    created_at DATETIME(6) NOT NULL,
+                    created_by VARCHAR(64) NOT NULL DEFAULT 'system'
+                ) CHARACTER SET utf8mb4
+            """)
+            await cur.execute("SELECT COUNT(*) FROM users")
+            (count,) = await cur.fetchone()
+            if count == 0:
+                username = os.getenv("OCPP_USERNAME", "admin")
+                password = os.getenv("OCPP_PASSWORD", "changeme")
+                await cur.execute(
+                    "INSERT INTO users (username, password_hash, role, created_at, created_by) "
+                    "VALUES (%s, %s, 'admin', %s, 'system')",
+                    (username, _hash_password(password),
+                     datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")),
+                )
+                print(f"[startup] Admin user '{username}' created from env vars.")
+        await conn.commit()
 
 
-def _load_users() -> list[dict]:
-    return json.loads(USERS_FILE.read_text()).get("users", [])
+async def _load_users() -> list[dict]:
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT username, password_hash, role, created_at, created_by FROM users")
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]
 
 
-def _save_users(users: list[dict]):
-    USERS_FILE.write_text(json.dumps({"users": users}, indent=2, ensure_ascii=False))
+async def _save_users(users: list[dict]):
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await conn.begin()
+            await cur.execute("DELETE FROM users")
+            for u in users:
+                await cur.execute(
+                    "INSERT INTO users (username, password_hash, role, created_at, created_by) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (u["username"], u["password_hash"], u["role"],
+                     u.get("created_at", ""), u.get("created_by", "system")),
+                )
+        await conn.commit()
 
 
-def _load_settings() -> dict:
-    data = json.loads(SETTINGS_FILE.read_text())
-    # Ensure all default keys exist
-    return {**_DEFAULT_SETTINGS, **data}
+async def _load_settings() -> dict:
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT ollama_url, default_model, analyze_prompt, explain_prompt FROM settings WHERE id=1")
+            row = await cur.fetchone()
+    return {**_DEFAULT_SETTINGS, **(dict(row) if row else {})}
 
 
-def _save_settings(settings: dict):
-    SETTINGS_FILE.write_text(json.dumps(settings, indent=2, ensure_ascii=False))
+async def _save_settings(settings: dict):
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "UPDATE settings SET ollama_url=%s, default_model=%s, analyze_prompt=%s, explain_prompt=%s WHERE id=1",
+                (settings.get("ollama_url", ""), settings.get("default_model", ""),
+                 settings.get("analyze_prompt", ""), settings.get("explain_prompt", "")),
+            )
+        await conn.commit()
 
 
 # ── Stateless signed session tokens ──────────────────────────
@@ -212,7 +276,7 @@ class AnalyzeRequest(BaseModel):
 # ── App factory ───────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _initialize_data()
+    await _initialize_db()
     yield
 
 
@@ -460,7 +524,7 @@ def parse_ocpp_logs(log_content: str) -> dict:
 # ── Auth endpoints ────────────────────────────────────────────
 @app.post("/api/auth/login")
 async def login(body: LoginRequest, response: Response):
-    users = _load_users()
+    users = await _load_users()
     user = next((u for u in users if u["username"] == body.username), None)
     if not user or not _verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Ungültige Anmeldedaten")
@@ -488,7 +552,7 @@ async def me(user: dict = Depends(get_current_user)):
 # ── User management ───────────────────────────────────────────
 @app.get("/api/users")
 async def list_users(_: dict = Depends(require_admin)):
-    users = _load_users()
+    users = await _load_users()
     return {"users": [
         {"username": u["username"], "role": u["role"], "created_at": u.get("created_at", "")}
         for u in users
@@ -503,7 +567,7 @@ async def create_user(body: CreateUserRequest, current: dict = Depends(require_a
         raise HTTPException(status_code=400, detail="Passwort muss mindestens 8 Zeichen lang sein")
     if body.role not in ("admin", "user"):
         raise HTTPException(status_code=400, detail="Ungültige Rolle (admin oder user)")
-    users = _load_users()
+    users = await _load_users()
     if any(u["username"] == body.username for u in users):
         raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
     new_user = {
@@ -514,7 +578,7 @@ async def create_user(body: CreateUserRequest, current: dict = Depends(require_a
         "created_by": current["username"],
     }
     users.append(new_user)
-    _save_users(users)
+    await _save_users(users)
     return {"username": new_user["username"], "role": new_user["role"], "created_at": new_user["created_at"]}
 
 
@@ -522,11 +586,11 @@ async def create_user(body: CreateUserRequest, current: dict = Depends(require_a
 async def delete_user(username: str, current: dict = Depends(require_admin)):
     if username == current["username"]:
         raise HTTPException(status_code=400, detail="Der eigene Account kann nicht gelöscht werden")
-    users = _load_users()
+    users = await _load_users()
     new_users = [u for u in users if u["username"] != username]
     if len(new_users) == len(users):
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
-    _save_users(new_users)
+    await _save_users(new_users)
     # Note: stateless tokens cannot be actively revoked.
     # Deleted users' tokens expire naturally after SESSION_TTL_HOURS.
 
@@ -534,17 +598,17 @@ async def delete_user(username: str, current: dict = Depends(require_admin)):
 # ── Settings endpoints ────────────────────────────────────────
 @app.get("/api/settings")
 async def get_settings(_: dict = Depends(get_current_user)):
-    return _load_settings()
+    return await _load_settings()
 
 
 @app.put("/api/settings")
 async def update_settings(body: UpdateSettingsRequest, _: dict = Depends(require_admin)):
-    settings = _load_settings()
+    settings = await _load_settings()
     for field in ("ollama_url", "default_model", "analyze_prompt", "explain_prompt"):
         val = getattr(body, field)
         if val is not None:
             settings[field] = val
-    _save_settings(settings)
+    await _save_settings(settings)
     return settings
 
 
@@ -564,7 +628,7 @@ async def parse_logs(request: ParseRequest, _: dict = Depends(get_current_user))
 
 @app.get("/api/models")
 async def get_models(ollama_url: str = "", user: dict = Depends(get_current_user)):
-    settings = _load_settings()
+    settings = await _load_settings()
     # Non-admins always use the server-configured URL
     if user["role"] != "admin" or not ollama_url:
         ollama_url = settings.get("ollama_url", "http://localhost:11434")
@@ -591,7 +655,7 @@ async def analyze_logs(request: AnalyzeRequest, user: dict = Depends(get_current
     # Non-admins use the server-configured ollama_url
     ollama_url = request.ollama_url
     if user["role"] != "admin":
-        settings = _load_settings()
+        settings = await _load_settings()
         ollama_url = settings.get("ollama_url", ollama_url)
 
     log_preview = (
@@ -724,7 +788,7 @@ async def explain(request: AnalyzeRequest, user: dict = Depends(get_current_user
     # Non-admins use the server-configured ollama_url
     ollama_url = request.ollama_url
     if user["role"] != "admin":
-        settings = _load_settings()
+        settings = await _load_settings()
         ollama_url = settings.get("ollama_url", ollama_url)
 
     customer_issue = request.customer_context.strip() or "allgemeine Log-Analyse"
