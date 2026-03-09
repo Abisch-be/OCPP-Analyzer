@@ -1442,9 +1442,12 @@ const EMPTY_STATES = {
 // ============================================================
 function clearLog() {
   logInput.value = '';
+  logInput.disabled = false;
+  if (analysisTitle)   { analysisTitle.value   = ''; analysisTitle.disabled   = false; }
+  if (customerContext) { customerContext.value  = ''; customerContext.disabled = false; }
+  const banner = document.getElementById('historyModeBanner');
+  if (banner) banner.remove();
   currentSessionId = generateSessionId();
-  if (analysisTitle) analysisTitle.value = '';
-  if (customerContext) customerContext.value = '';
   updateCharCount();
   markResultsDirty();
   showToast('Log geleert', 'info');
@@ -1692,7 +1695,20 @@ async function restoreSession(analyzeId, explainId) {
     explanationDone = true;
   }
 
-  // Schritt 3: History-Panel schließen und zum richtigen Tab springen
+  // Schritt 3: Eingabefelder sperren (Historie-Modus)
+  logInput.disabled = true;
+  if (analysisTitle)   analysisTitle.disabled   = true;
+  if (customerContext) customerContext.disabled  = true;
+  let banner = document.getElementById('historyModeBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'historyModeBanner';
+    banner.style.cssText = 'background:var(--warning,#f59e0b);color:#000;padding:6px 12px;font-size:0.82rem;text-align:center;border-radius:4px;margin-bottom:8px;';
+    banner.textContent = 'Historie geladen – Log leeren für neue Analyse';
+    logInput.parentElement.insertBefore(banner, logInput);
+  }
+
+  // Schritt 4: History-Panel schließen und zum richtigen Tab springen
   if (historyPanel) historyPanel.classList.add('hidden');
   if (backdrop)     backdrop.classList.remove('visible');
   if (analyzeEntry)      switchTab('analysis');
