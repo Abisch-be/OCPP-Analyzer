@@ -146,30 +146,33 @@ async def _initialize_db():
                      datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")),
                 )
                 print(f"[startup] Admin user '{username}' created from env vars.")
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS analyses (
-                    id          INT AUTO_INCREMENT PRIMARY KEY,
-                    type        VARCHAR(16)   NOT NULL,
-                    created_at  DATETIME(6)   NOT NULL,
-                    created_by  VARCHAR(64)   NOT NULL,
-                    model       VARCHAR(256)  NOT NULL DEFAULT '',
-                    title       VARCHAR(256)  NOT NULL DEFAULT '',
-                    session_id  VARCHAR(64)   NOT NULL DEFAULT '',
-                    customer_context TEXT     NOT NULL DEFAULT '',
-                    stats       JSON          NOT NULL,
-                    result_text LONGTEXT      NOT NULL,
-                    log_snippet TEXT          NOT NULL DEFAULT ''
-                ) CHARACTER SET utf8mb4
-            """)
-            # Migration: add new columns for existing DBs (try/except for MySQL 5.7 compatibility)
-            for _col, _defn in [
-                ("`title`",      "VARCHAR(256) NOT NULL DEFAULT ''"),
-                ("`session_id`", "VARCHAR(64)  NOT NULL DEFAULT ''"),
-            ]:
-                try:
-                    await cur.execute(f"ALTER TABLE analyses ADD COLUMN {_col} {_defn}")
-                except Exception:
-                    pass  # Column already exists
+            try:
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS analyses (
+                        id          INT AUTO_INCREMENT PRIMARY KEY,
+                        type        VARCHAR(16)   NOT NULL,
+                        created_at  DATETIME(6)   NOT NULL,
+                        created_by  VARCHAR(64)   NOT NULL,
+                        model       VARCHAR(256)  NOT NULL DEFAULT '',
+                        title       VARCHAR(256)  NOT NULL DEFAULT '',
+                        session_id  VARCHAR(64)   NOT NULL DEFAULT '',
+                        customer_context TEXT     NOT NULL DEFAULT '',
+                        stats       MEDIUMTEXT    NOT NULL DEFAULT '{}',
+                        result_text LONGTEXT      NOT NULL DEFAULT '',
+                        log_snippet TEXT          NOT NULL DEFAULT ''
+                    ) CHARACTER SET utf8mb4
+                """)
+                # Migration: add new columns for existing DBs
+                for _col, _defn in [
+                    ("`title`",      "VARCHAR(256) NOT NULL DEFAULT ''"),
+                    ("`session_id`", "VARCHAR(64)  NOT NULL DEFAULT ''"),
+                ]:
+                    try:
+                        await cur.execute(f"ALTER TABLE analyses ADD COLUMN {_col} {_defn}")
+                    except Exception:
+                        pass  # Column already exists
+            except Exception as e:
+                print(f"[startup] analyses table setup skipped: {e}")
         await conn.commit()
 
 
