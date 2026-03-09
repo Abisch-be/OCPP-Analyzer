@@ -1386,3 +1386,182 @@ details[open] .issue-chevron { transform: rotate(45deg); margin-top: 0; margin-b
   font-size: 13px;
   color: var(--ink);
 }
+
+/* ================================================================
+   Login Overlay
+   ================================================================ */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.login-overlay.hidden { display: none !important; }
+
+.login-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 36px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 8px 40px rgba(25,24,26,0.10);
+}
+
+.login-wordmark {
+  justify-content: center;
+  gap: 6px;
+}
+.login-wordmark .wordmark-ocpp  { font-size: 20px; }
+.login-wordmark .wordmark-analyzer { font-size: 20px; }
+
+.login-subtitle {
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: -14px;
+}
+
+#loginForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.login-error {
+  font-size: 12px;
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid var(--red-border);
+  border-radius: var(--r);
+  padding: 7px 12px;
+}
+
+.login-submit-btn {
+  margin-top: 4px;
+  padding: 10px 16px;
+  font-size: 14px;
+}
+
+/* ================================================================
+   Header – User info & Logout
+   ================================================================ */
+.header-user-label {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+/* ================================================================
+   Admin Section (inside Settings Panel)
+   ================================================================ */
+.admin-section {
+  border-top: 1px solid var(--line);
+  padding: 14px 24px 18px;
+}
+.admin-section.hidden { display: none !important; }
+
+.admin-section-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 12px;
+}
+
+.admin-users-area {
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.user-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.user-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.user-table td {
+  padding: 7px 10px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+.user-table tr:last-child td { border-bottom: none; }
+.user-table-empty {
+  color: var(--ink-4);
+  font-size: 12px;
+  padding: 12px 10px;
+}
+
+.user-role-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.user-role-badge.role-admin {
+  background: var(--blue-dim);
+  color: var(--blue);
+  border: 1px solid var(--blue-border);
+}
+.user-role-badge.role-user {
+  background: var(--panel-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+
+.user-delete-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+.user-delete-btn:hover {
+  background: var(--red-dim);
+  border-color: var(--red-border);
+  color: var(--red);
+}
+
+.admin-create-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+

@@ -13,6 +13,7 @@ let analysisDone           = false;
 let explanationDone        = false;
 let timelineChartInstance  = null;
 let lastParsedContent      = '';
+let currentUser            = null;
 
 // --- DOM References ---
 const logInput        = document.getElementById('logInput');
@@ -76,36 +77,212 @@ Allgemeine Regeln:
 - Kein E-Mail-Format, keine Begrüßung, keine Grußformel`;
 
 // --- Initialization ---
-window.addEventListener('DOMContentLoaded', () => {
-  loadSettings();
-  setupDragDrop();
-  setupEventListeners();
+window.addEventListener('DOMContentLoaded', async () => {
+  // Login form handler always active, regardless of auth state
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const loginError = document.getElementById('loginError');
+    loginError.classList.add('hidden');
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        loginError.textContent = err.detail || 'Ungültige Anmeldedaten';
+        loginError.classList.remove('hidden');
+        return;
+      }
+      const userData = await res.json();
+      currentUser = userData;
+      hideLoginOverlay();
+      await initApp(userData);
+    } catch (err) {
+      loginError.textContent = 'Verbindungsfehler: ' + err.message;
+      loginError.classList.remove('hidden');
+    }
+  });
+
+  const user = await checkAuth();
+  if (!user) {
+    showLoginOverlay();
+    return;
+  }
+  currentUser = user;
+  await initApp(user);
 });
 
 // ============================================================
-// Settings – LocalStorage
+// Auth helpers
 // ============================================================
-function loadSettings() {
-  const savedUrl   = localStorage.getItem('ollama_url');
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    currentUser = null;
+    showLoginOverlay();
+    throw new Error('Sitzung abgelaufen – bitte neu anmelden');
+  }
+  return res;
+}
+
+function showLoginOverlay() {
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('loginUsername').focus();
+}
+
+function hideLoginOverlay() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+}
+
+async function initApp(user) {
+  await loadServerSettings(user);
+  setupDragDrop();
+  setupEventListeners();
+
+  // Show/hide admin section
+  if (user.role === 'admin') {
+    document.getElementById('adminSection').classList.remove('hidden');
+    loadAdminPanel();
+  }
+
+  // Header: user label + logout button (only attach logout listener once)
+  const label = document.getElementById('currentUserLabel');
+  const logoutBtn = document.getElementById('logoutBtn');
+  label.textContent = user.username;
+  label.classList.remove('hidden');
+  logoutBtn.style.display = '';
+  if (!logoutBtn._listenerAdded) {
+    logoutBtn._listenerAdded = true;
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      currentUser = null;
+      label.classList.add('hidden');
+      logoutBtn.style.display = 'none';
+      document.getElementById('adminSection').classList.add('hidden');
+      showLoginOverlay();
+    });
+  }
+}
+
+// ============================================================
+// Settings – Server-seitig
+// ============================================================
+async function loadServerSettings(user) {
+  try {
+    const res = await apiFetch('/api/settings');
+    const settings = await res.json();
+
+    ollamaUrl.value     = settings.ollama_url     || 'http://localhost:11434';
+    analyzePrompt.value = settings.analyze_prompt || DEFAULT_ANALYZE_PROMPT;
+    explainPrompt.value = settings.explain_prompt || DEFAULT_EXPLAIN_PROMPT;
+
+    // Non-admins: settings are read-only
+    if (user.role !== 'admin') {
+      ollamaUrl.disabled     = true;
+      analyzePrompt.disabled = true;
+      explainPrompt.disabled = true;
+      document.getElementById('resetAnalyzePrompt').style.display = 'none';
+      document.getElementById('resetExplainPrompt').style.display = 'none';
+    }
+  } catch {
+    analyzePrompt.value = DEFAULT_ANALYZE_PROMPT;
+    explainPrompt.value = DEFAULT_EXPLAIN_PROMPT;
+  }
+
+  // Model selection stays in localStorage
   const savedModel = localStorage.getItem('ollama_model');
-  if (savedUrl)   ollamaUrl.value = savedUrl;
   if (savedModel) {
-    // Add saved model as option so it's visible before loading
     const opt = document.createElement('option');
     opt.value = savedModel;
     opt.textContent = savedModel;
     opt.selected = true;
     modelSelect.appendChild(opt);
   }
-  analyzePrompt.value = localStorage.getItem('analyze_prompt') || DEFAULT_ANALYZE_PROMPT;
-  explainPrompt.value = localStorage.getItem('explain_prompt') || DEFAULT_EXPLAIN_PROMPT;
 }
 
-function saveSettings() {
-  localStorage.setItem('ollama_url', ollamaUrl.value.trim());
+async function saveSettings() {
+  // Model selection always saved in localStorage
   if (modelSelect.value) localStorage.setItem('ollama_model', modelSelect.value);
-  localStorage.setItem('analyze_prompt', analyzePrompt.value);
-  localStorage.setItem('explain_prompt', explainPrompt.value);
+
+  // Admins save URL and prompts to server
+  if (currentUser && currentUser.role === 'admin') {
+    try {
+      await apiFetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ollama_url:     ollamaUrl.value.trim(),
+          analyze_prompt: analyzePrompt.value,
+          explain_prompt: explainPrompt.value,
+        }),
+      });
+    } catch {
+      // fire-and-forget; toast shown by apiFetch on 401 already
+    }
+  }
+}
+
+// ============================================================
+// Admin Panel
+// ============================================================
+async function loadAdminPanel() {
+  const tbody = document.getElementById('userTableBody');
+  try {
+    const res = await apiFetch('/api/users');
+    const data = await res.json();
+    tbody.innerHTML = '';
+    if (!data.users.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="user-table-empty">Keine Benutzer gefunden</td></tr>';
+      return;
+    }
+    data.users.forEach(u => {
+      const tr = document.createElement('tr');
+      const createdAt = u.created_at ? new Date(u.created_at).toLocaleDateString('de') : '–';
+      tr.innerHTML = `
+        <td>${escapeHtml(u.username)}</td>
+        <td><span class="user-role-badge role-${u.role}">${u.role}</span></td>
+        <td>${createdAt}</td>
+        <td>${u.username !== currentUser.username
+          ? `<button class="user-delete-btn" data-username="${escapeHtml(u.username)}">Löschen</button>`
+          : ''}</td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.user-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => deleteUser(btn.dataset.username));
+    });
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4" class="user-table-empty">Fehler beim Laden</td></tr>';
+  }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Benutzer "${username}" wirklich löschen?`)) return;
+  try {
+    const res = await apiFetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    if (res.status === 204 || res.ok) {
+      showToast(`Benutzer "${username}" gelöscht`, 'success');
+      loadAdminPanel();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Fehler beim Löschen', 'error');
+    }
+  } catch (err) {
+    showToast('Fehler: ' + err.message, 'error');
+  }
 }
 
 // ============================================================
@@ -143,6 +320,38 @@ function setupEventListeners() {
   resetExplainPrompt.addEventListener('click', () => { explainPrompt.value = DEFAULT_EXPLAIN_PROMPT; saveSettings(); });
   analyzePrompt.addEventListener('change', saveSettings);
   explainPrompt.addEventListener('change', saveSettings);
+
+  // Admin: create user
+  const createUserBtn = document.getElementById('createUserBtn');
+  if (createUserBtn) {
+    createUserBtn.addEventListener('click', async () => {
+      const username = document.getElementById('newUsername').value.trim();
+      const password = document.getElementById('newPassword').value;
+      const role     = document.getElementById('newRole').value;
+      const status   = document.getElementById('createUserStatus');
+      status.textContent = '';
+      if (!username || !password) { status.textContent = 'Benutzername und Passwort erforderlich'; return; }
+      try {
+        const res = await apiFetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, role }),
+        });
+        if (res.ok) {
+          showToast(`Benutzer "${username}" angelegt`, 'success');
+          document.getElementById('newUsername').value = '';
+          document.getElementById('newPassword').value = '';
+          status.textContent = '';
+          loadAdminPanel();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          status.textContent = err.detail || 'Fehler';
+        }
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    });
+  }
 
   fileInput.addEventListener('change', (e) => {
     if (e.target.files[0]) handleFileUpload(e.target.files[0]);
@@ -208,7 +417,7 @@ async function loadModels() {
   modelsStatus.textContent = 'Lade...';
 
   try {
-    const response = await fetch(`/api/models?ollama_url=${encodeURIComponent(url)}`);
+    const response = await apiFetch(`/api/models?ollama_url=${encodeURIComponent(url)}`);
     if (!response.ok) {
       const err = await response.json().catch(() => ({ detail: response.statusText }));
       throw new Error(err.detail || 'Fehler');
@@ -262,7 +471,7 @@ async function parseLogs() {
   parseBtn.textContent = '⏳ Parsen...';
 
   try {
-    const response = await fetch('/api/parse', {
+    const response = await apiFetch('/api/parse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ log_content: content }),
@@ -806,7 +1015,7 @@ async function analyzeLogs() {
   let success  = false;
 
   try {
-    const response = await fetch('/api/analyze', {
+    const response = await apiFetch('/api/analyze', {
       method: 'POST',
       signal,
       headers: { 'Content-Type': 'application/json' },
@@ -1020,7 +1229,7 @@ async function draftExplanation() {
   let success = false;
 
   try {
-    const response = await fetch('/api/explain', {
+    const response = await apiFetch('/api/explain', {
       method: 'POST',
       signal,
       headers: { 'Content-Type': 'application/json' },

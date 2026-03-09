@@ -27,6 +27,8 @@
       </div>
 
       <nav class="header-right">
+        <span id="currentUserLabel" class="header-user-label hidden"></span>
+        <button class="ghost-btn" id="logoutBtn" aria-label="Abmelden" style="display:none">Abmelden</button>
         <button class="ghost-btn icon-btn" id="settingsToggle" aria-label="Einstellungen">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
@@ -63,6 +65,42 @@
               <button id="resetExplainPrompt" class="settings-reset-btn">Zurücksetzen</button>
             </div>
             <textarea id="explainPrompt" class="settings-prompt-textarea" rows="5" spellcheck="false"></textarea>
+          </div>
+        </div>
+
+        <!-- ── Admin-Bereich (nur für Admins sichtbar) ── -->
+        <div id="adminSection" class="admin-section hidden">
+          <div class="admin-section-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Benutzerverwaltung
+          </div>
+          <div class="admin-users-area">
+            <table class="user-table" id="userTable">
+              <thead>
+                <tr>
+                  <th>Benutzername</th>
+                  <th>Rolle</th>
+                  <th>Erstellt am</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="userTableBody">
+                <tr><td colspan="4" class="user-table-empty">Lade Benutzer…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="admin-create-row">
+            <input id="newUsername" type="text" class="settings-input" placeholder="Benutzername">
+            <input id="newPassword" type="password" class="settings-input" placeholder="Passwort (min. 8 Zeichen)">
+            <select id="newRole" class="settings-select">
+              <option value="user">Benutzer</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button id="createUserBtn" class="settings-load">Anlegen</button>
+            <span id="createUserStatus" class="settings-status"></span>
           </div>
         </div>
       </div>
@@ -204,6 +242,25 @@
   <div id="ocppTooltip" class="ocpp-tooltip hidden">
     <div class="ocpp-tooltip-title"></div>
     <div class="ocpp-tooltip-body"></div>
+  </div>
+
+  <!-- ── Login-Overlay ──────────────────────────────────── -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+      <div class="wordmark login-wordmark">
+        <span class="wordmark-ocpp">OCPP</span>
+        <span class="wordmark-analyzer">Analyzer</span>
+      </div>
+      <p class="login-subtitle">OCPP 1.6 Diagnostic Suite</p>
+      <form id="loginForm" autocomplete="on">
+        <input id="loginUsername" type="text" class="settings-input login-input"
+               placeholder="Benutzername" autocomplete="username" required>
+        <input id="loginPassword" type="password" class="settings-input login-input"
+               placeholder="Passwort" autocomplete="current-password" required>
+        <div id="loginError" class="login-error hidden"></div>
+        <button type="submit" class="action-primary action-full login-submit-btn">Anmelden</button>
+      </form>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>

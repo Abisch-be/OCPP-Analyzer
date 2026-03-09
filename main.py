@@ -2,14 +2,18 @@ import os
 import re
 import json
 import secrets
-from typing import Annotated
-from fastapi import FastAPI, HTTPException, Depends
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from contextlib import asynccontextmanager
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Depends, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 import httpx
 from duckduckgo_search import DDGS
+from passlib.context import CryptContext
 
 # Module-level compiled regex constants (avoid recompilation per request)
 _DATE_PATTERN = re.compile(r"\d{2}\.\d{2}\.\d{4}\s*\|\s*\d{2}:\d{2}:\d{2}")
@@ -20,6 +24,7 @@ _SORT_TYPE_RE = re.compile(r'\[\s*(\d)')
 _OCPP_PATTERN = re.compile(r"(\[\s*(?:2|3|4)\s*,\s*\"[^\"]*\".*\])")
 _TS_PATTERN   = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[.,]\d+)?Z?)\s*")
 _DIR_PATTERN  = re.compile(r"\b(SEND|RECV|->|<-)\b", re.IGNORECASE)
+_USERNAME_RE  = re.compile(r'^[a-zA-Z0-9_-]{3,32}$')
 
 # OCPP 1.6 spec: actions initiated by the Charging Station → direction SEND
 _CS_INITIATED_ACTIONS = frozenset({
@@ -39,34 +44,99 @@ _BACKEND_INITIATED_ACTIONS = frozenset({
     "UnlockConnector", "UpdateFirmware",
 })
 
-app = FastAPI(title="OCPP Log Analyzer")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# ── Data layer ────────────────────────────────────────────────
+DATA_DIR     = Path(os.getenv("DATA_DIR", "/app/data"))
+USERS_FILE   = DATA_DIR / "users.json"
+SETTINGS_FILE = DATA_DIR / "settings.json"
 
-security = HTTPBasic()
-
-
-def authenticate(credentials: Annotated[HTTPBasicCredentials, Depends(security)]) -> str:
-    correct_user = os.getenv("OCPP_USERNAME", "admin")
-    correct_pass = os.getenv("OCPP_PASSWORD", "changeme")
-    ok = (
-        secrets.compare_digest(credentials.username.encode(), correct_user.encode()) and
-        secrets.compare_digest(credentials.password.encode(), correct_pass.encode())
-    )
-    if not ok:
-        raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Basic"})
-    return credentials.username
+SESSION_TTL_HOURS = 8
+_sessions: dict[str, dict] = {}
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 MSG_TYPES = {2: "CALL", 3: "CALLRESULT", 4: "CALLERROR"}
 
+_DEFAULT_SETTINGS = {
+    "ollama_url": "http://localhost:11434",
+    "default_model": "",
+    "analyze_prompt": "",
+    "explain_prompt": "",
+}
 
-def _table_sort_key(line: str) -> tuple:
-    parts = line.split(' ', 1)
-    ts = parts[0] if parts else ''
-    mtype = 9
-    m = _SORT_TYPE_RE.search(line)
-    if m:
-        mtype = int(m.group(1))
-    return (ts, mtype)
+
+def _initialize_data():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not USERS_FILE.exists():
+        username = os.getenv("OCPP_USERNAME", "admin")
+        password = os.getenv("OCPP_PASSWORD", "changeme")
+        users_data = {"users": [{
+            "username": username,
+            "password_hash": pwd_context.hash(password),
+            "role": "admin",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": "system",
+        }]}
+        USERS_FILE.write_text(json.dumps(users_data, indent=2, ensure_ascii=False))
+        print(f"[startup] Admin user '{username}' created from env vars. "
+              "OCPP_USERNAME/OCPP_PASSWORD are no longer used after first boot.")
+    if not SETTINGS_FILE.exists():
+        SETTINGS_FILE.write_text(json.dumps(_DEFAULT_SETTINGS, indent=2, ensure_ascii=False))
+
+
+def _load_users() -> list[dict]:
+    return json.loads(USERS_FILE.read_text()).get("users", [])
+
+
+def _save_users(users: list[dict]):
+    USERS_FILE.write_text(json.dumps({"users": users}, indent=2, ensure_ascii=False))
+
+
+def _load_settings() -> dict:
+    data = json.loads(SETTINGS_FILE.read_text())
+    # Ensure all default keys exist
+    return {**_DEFAULT_SETTINGS, **data}
+
+
+def _save_settings(settings: dict):
+    SETTINGS_FILE.write_text(json.dumps(settings, indent=2, ensure_ascii=False))
+
+
+# ── Auth dependencies ─────────────────────────────────────────
+def get_current_user(request: Request) -> dict:
+    token = request.cookies.get("session")
+    if not token or token not in _sessions:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet")
+    session = _sessions[token]
+    if session["expires_at"] < datetime.now(timezone.utc):
+        del _sessions[token]
+        raise HTTPException(status_code=401, detail="Sitzung abgelaufen")
+    # Slide TTL
+    session["expires_at"] = datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS)
+    return {"username": session["username"], "role": session["role"]}
+
+
+def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Nur für Administratoren")
+    return user
+
+
+# ── Pydantic models ───────────────────────────────────────────
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+
+
+class UpdateSettingsRequest(BaseModel):
+    ollama_url: Optional[str] = None
+    default_model: Optional[str] = None
+    analyze_prompt: Optional[str] = None
+    explain_prompt: Optional[str] = None
 
 
 class ParseRequest(BaseModel):
@@ -82,9 +152,29 @@ class AnalyzeRequest(BaseModel):
     system_prompt: str | None = None
 
 
+# ── App factory ───────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _initialize_data()
+    yield
+
+
+app = FastAPI(title="OCPP Log Analyzer", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# ── OCPP parsing helpers ──────────────────────────────────────
+def _table_sort_key(line: str) -> tuple:
+    parts = line.split(' ', 1)
+    ts = parts[0] if parts else ''
+    mtype = 9
+    m = _SORT_TYPE_RE.search(line)
+    if m:
+        mtype = int(m.group(1))
+    return (ts, mtype)
+
+
 def is_table_format(log_content: str) -> bool:
-    """Erkennt ob der Log im Web-UI Tabellenformat vorliegt (DD.MM.YYYY | HH:MM:SS).
-    Durchsucht mehr Zeilen, da chaotisch kopierter Text viel UI-Rauschen voranstellen kann."""
     for line in log_content.split("\n")[:100]:
         if _DATE_PATTERN.search(line):
             return True
@@ -92,53 +182,29 @@ def is_table_format(log_content: str) -> bool:
 
 
 def preprocess_table_format(log_content: str) -> str:
-    """Konvertiert das Web-UI Tabellenformat in ein für den Parser lesbares Format.
-
-    Eingabe (ein oder zwei Zeilen pro Nachricht, beliebige UI-Sprache):
-        Heartbeat    05.03.2026 | 21:29:24    vom Backend (success)
-        [ 3, "1690623359", { "currentTime": "2026-03-05T20:29:24.322Z" } ]
-
-    Ausgabe (eine Zeile, Richtung wird aus OCPP-Action inferiert):
-        2026-03-05T21:29:24.000Z [ 3, "1690623359", { "currentTime": "..." } ]
-
-    Die Richtungsbestimmung erfolgt sprachunabhängig im Hauptparser anhand
-    der OCPP 1.6 Spec (welche Actions von CS vs. Backend initiiert werden).
-    """
     lines = log_content.split("\n")
     result = []
-
     i = 0
     while i < len(lines):
         stripped = lines[i].strip()
-
         match = _META_PATTERN.match(stripped)
         if match:
-            date_str = match.group(2)   # DD.MM.YYYY
-            time_str = match.group(3)   # HH:MM:SS
-
+            date_str = match.group(2)
+            time_str = match.group(3)
             day, month, year = date_str.split(".")
             iso_ts = f"{year}-{month}-{day}T{time_str}.000Z"
-
-            # Nächste nicht-leere Zeile muss das JSON sein
             j = i + 1
             while j < len(lines) and not lines[j].strip():
                 j += 1
-
             if j < len(lines) and lines[j].strip().startswith("["):
                 result.append(f"{iso_ts} {lines[j].strip()}")
                 i = j + 1
                 continue
-
-        # Zeilen mit reinen OCPP-JSON-Arrays direkt übernehmen (für einzeilige Formate)
         if stripped.startswith("[") and _OCPP_PATTERN.search(stripped):
             result.append(stripped)
             i += 1
             continue
-
-        # Sonstiges UI-Rauschen ignorieren (Logos, Navigation, Header, etc.)
         i += 1
-
-    # Chronologisch sortieren: Timestamp aufsteigend, CALL (2) vor CALLRESULT (3) bei gleichem Timestamp
     result.sort(key=_table_sort_key)
     return "\n".join(result)
 
@@ -150,50 +216,37 @@ def parse_ocpp_logs(log_content: str) -> dict:
     messages = []
     errors = []
     warnings = []
-
     lines = log_content.split("\n")
-
-    call_map = {}       # UniqueId -> CALL message dict
-    pending_results = {}  # UniqueId -> CALLRESULT msg (arrived before its CALL)
+    call_map = {}
+    pending_results = {}
     has_boot_notification = False
 
     for line_num, line in enumerate(lines, 1):
         if not line.strip():
             continue
-
-        # Extract timestamp
         timestamp = None
         ts_match = _TS_PATTERN.match(line.strip())
         if ts_match:
             timestamp = ts_match.group(1)
-
-        # Extract direction
         direction = None
         dir_match = _DIR_PATTERN.search(line)
         if dir_match:
             d = dir_match.group(1).upper()
             direction = "SEND" if d in ("SEND", "->") else "RECV"
-
-        # Find OCPP JSON in line
         ocpp_match = _OCPP_PATTERN.search(line)
         if not ocpp_match:
             continue
-
         try:
             msg_json = json.loads(ocpp_match.group(1))
         except json.JSONDecodeError:
             continue
-
         if not isinstance(msg_json, list) or len(msg_json) < 2:
             continue
-
         msg_type_id = msg_json[0]
         if msg_type_id not in MSG_TYPES:
             continue
-
         msg_type = MSG_TYPES[msg_type_id]
         unique_id = msg_json[1]
-
         msg = {
             "line": line_num,
             "type": msg_type,
@@ -203,14 +256,11 @@ def parse_ocpp_logs(log_content: str) -> dict:
             "direction": direction,
             "raw": ocpp_match.group(1),
         }
-
-        # --- CALL ---
         if msg_type == "CALL" and len(msg_json) >= 3:
             action = msg_json[2]
             payload = msg_json[3] if len(msg_json) > 3 else {}
             msg["action"] = action
             msg["payload"] = payload
-            # Richtung aus OCPP 1.6 Spec ableiten (sprachunabhängig)
             if direction is None:
                 if action in _CS_INITIATED_ACTIONS:
                     direction = "SEND"
@@ -218,11 +268,8 @@ def parse_ocpp_logs(log_content: str) -> dict:
                     direction = "RECV"
             msg["direction"] = direction
             call_map[unique_id] = msg
-
             if action == "BootNotification":
                 has_boot_notification = True
-
-            # CALLRESULT already arrived before this CALL (reverse-ordered log)?
             if unique_id in pending_results:
                 result_msg = pending_results.pop(unique_id)
                 result_msg["action"] = action
@@ -231,46 +278,36 @@ def parse_ocpp_logs(log_content: str) -> dict:
                 if isinstance(result_payload, dict):
                     r_status = result_payload.get("status", "")
                     if r_status in ("Rejected", "Faulted", "Invalid"):
-                        errors.append(
-                            {
-                                "line": result_msg["line"],
-                                "type": "error",
-                                "message": f"CALLRESULT status '{r_status}' für {action}",
-                                "detail": json.dumps(result_payload, ensure_ascii=False),
-                            }
-                        )
+                        errors.append({
+                            "line": result_msg["line"],
+                            "type": "error",
+                            "message": f"CALLRESULT status '{r_status}' für {action}",
+                            "detail": json.dumps(result_payload, ensure_ascii=False),
+                        })
                     if action == "StatusNotification":
                         error_code = payload.get("errorCode", "NoError")
                         connector_status = payload.get("status", "")
                         if error_code != "NoError":
-                            errors.append(
-                                {
-                                    "line": line_num,
-                                    "type": "error",
-                                    "message": f"StatusNotification errorCode: '{error_code}' (Status: {connector_status})",
-                                    "detail": json.dumps(payload, ensure_ascii=False),
-                                }
-                            )
+                            errors.append({
+                                "line": line_num,
+                                "type": "error",
+                                "message": f"StatusNotification errorCode: '{error_code}' (Status: {connector_status})",
+                                "detail": json.dumps(payload, ensure_ascii=False),
+                            })
                         elif connector_status == "Faulted":
-                            errors.append(
-                                {
-                                    "line": line_num,
-                                    "type": "error",
-                                    "message": "StatusNotification: Ladestation meldet 'Faulted'",
-                                    "detail": json.dumps(payload, ensure_ascii=False),
-                                }
-                            )
-
-        # --- CALLRESULT ---
+                            errors.append({
+                                "line": line_num,
+                                "type": "error",
+                                "message": "StatusNotification: Ladestation meldet 'Faulted'",
+                                "detail": json.dumps(payload, ensure_ascii=False),
+                            })
         elif msg_type == "CALLRESULT":
             payload = msg_json[2] if len(msg_json) > 2 else {}
             msg["payload"] = payload
-
             if unique_id in call_map:
                 original_call = call_map[unique_id]
                 msg["action"] = original_call.get("action", "Unknown")
                 original_call["answered"] = True
-                # Richtung: Antwort ist entgegengesetzt zum ursprünglichen CALL
                 if direction is None:
                     call_dir = original_call.get("direction")
                     if call_dir == "SEND":
@@ -278,52 +315,35 @@ def parse_ocpp_logs(log_content: str) -> dict:
                     elif call_dir == "RECV":
                         direction = "SEND"
                 msg["direction"] = direction
-
                 if isinstance(payload, dict):
                     status = payload.get("status", "")
-                    # Rejected / Faulted / Invalid in CALLRESULT payload
                     if status in ("Rejected", "Faulted", "Invalid"):
-                        errors.append(
-                            {
-                                "line": line_num,
-                                "type": "error",
-                                "message": f"CALLRESULT status '{status}' für {msg['action']}",
-                                "detail": json.dumps(payload, ensure_ascii=False),
-                            }
-                        )
-
-                    # StatusNotification: check original CALL payload
+                        errors.append({
+                            "line": line_num,
+                            "type": "error",
+                            "message": f"CALLRESULT status '{status}' für {msg['action']}",
+                            "detail": json.dumps(payload, ensure_ascii=False),
+                        })
                     if original_call.get("action") == "StatusNotification":
                         call_payload = original_call.get("payload", {})
                         error_code = call_payload.get("errorCode", "NoError")
                         connector_status = call_payload.get("status", "")
                         if error_code != "NoError":
-                            errors.append(
-                                {
-                                    "line": original_call["line"],
-                                    "type": "error",
-                                    "message": f"StatusNotification errorCode: '{error_code}' (Status: {connector_status})",
-                                    "detail": json.dumps(
-                                        call_payload, ensure_ascii=False
-                                    ),
-                                }
-                            )
+                            errors.append({
+                                "line": original_call["line"],
+                                "type": "error",
+                                "message": f"StatusNotification errorCode: '{error_code}' (Status: {connector_status})",
+                                "detail": json.dumps(call_payload, ensure_ascii=False),
+                            })
                         elif connector_status == "Faulted":
-                            errors.append(
-                                {
-                                    "line": original_call["line"],
-                                    "type": "error",
-                                    "message": "StatusNotification: Ladestation meldet 'Faulted'",
-                                    "detail": json.dumps(
-                                        call_payload, ensure_ascii=False
-                                    ),
-                                }
-                            )
+                            errors.append({
+                                "line": original_call["line"],
+                                "type": "error",
+                                "message": "StatusNotification: Ladestation meldet 'Faulted'",
+                                "detail": json.dumps(call_payload, ensure_ascii=False),
+                            })
             else:
-                # CALLRESULT arrived before its CALL (reverse-ordered log)
                 pending_results[unique_id] = msg
-
-        # --- CALLERROR ---
         elif msg_type == "CALLERROR":
             error_code = msg_json[2] if len(msg_json) > 2 else "Unknown"
             error_desc = msg_json[3] if len(msg_json) > 3 else ""
@@ -331,12 +351,10 @@ def parse_ocpp_logs(log_content: str) -> dict:
             msg["errorCode"] = error_code
             msg["errorDescription"] = error_desc
             msg["errorDetails"] = error_details
-
             action = "Unknown"
             if unique_id in call_map:
                 action = call_map[unique_id].get("action", "Unknown")
                 call_map[unique_id]["answered"] = True
-                # Richtung: Antwort ist entgegengesetzt zum ursprünglichen CALL
                 if direction is None:
                     call_dir = call_map[unique_id].get("direction")
                     if call_dir == "SEND":
@@ -345,41 +363,31 @@ def parse_ocpp_logs(log_content: str) -> dict:
                         direction = "SEND"
             msg["action"] = action
             msg["direction"] = direction
-
-            errors.append(
-                {
-                    "line": line_num,
-                    "type": "error",
-                    "message": f"CALLERROR: {error_code} – {error_desc} (Aktion: {action})",
-                    "detail": json.dumps(error_details, ensure_ascii=False),
-                }
-            )
-
+            errors.append({
+                "line": line_num,
+                "type": "error",
+                "message": f"CALLERROR: {error_code} – {error_desc} (Aktion: {action})",
+                "detail": json.dumps(error_details, ensure_ascii=False),
+            })
         messages.append(msg)
 
-    # Check for unanswered CALLs
     for uid, call_msg in call_map.items():
         if not call_msg.get("answered"):
             action = call_msg.get("action", uid)
-            warnings.append(
-                {
-                    "line": call_msg["line"],
-                    "type": "warning",
-                    "message": f"Unbeantworteter CALL: {action} (UniqueId: {uid})",
-                    "detail": call_msg.get("raw", ""),
-                }
-            )
-
-    # Check for missing BootNotification
-    if not has_boot_notification and messages:
-        warnings.append(
-            {
-                "line": 0,
+            warnings.append({
+                "line": call_msg["line"],
                 "type": "warning",
-                "message": "Kein BootNotification im Log gefunden",
-                "detail": "Die Ladestation sollte beim Start ein BootNotification senden.",
-            }
-        )
+                "message": f"Unbeantworteter CALL: {action} (UniqueId: {uid})",
+                "detail": call_msg.get("raw", ""),
+            })
+
+    if not has_boot_notification and messages:
+        warnings.append({
+            "line": 0,
+            "type": "warning",
+            "message": "Kein BootNotification im Log gefunden",
+            "detail": "Die Ladestation sollte beim Start ein BootNotification senden.",
+        })
 
     stats = {
         "total": len(messages),
@@ -389,22 +397,118 @@ def parse_ocpp_logs(log_content: str) -> dict:
         "errors": len(errors),
         "warnings": len(warnings),
     }
+    return {"messages": messages, "errors": errors, "warnings": warnings, "stats": stats}
 
-    return {
-        "messages": messages,
-        "errors": errors,
-        "warnings": warnings,
-        "stats": stats,
+
+# ── Auth endpoints ────────────────────────────────────────────
+@app.post("/api/auth/login")
+async def login(body: LoginRequest, response: Response):
+    users = _load_users()
+    user = next((u for u in users if u["username"] == body.username), None)
+    if not user or not pwd_context.verify(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Ungültige Anmeldedaten")
+    token = secrets.token_hex(32)
+    _sessions[token] = {
+        "username": user["username"],
+        "role": user["role"],
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS),
     }
+    response.set_cookie(
+        "session", token,
+        httponly=True, samesite="lax",
+        max_age=SESSION_TTL_HOURS * 3600,
+        path="/",
+    )
+    return {"username": user["username"], "role": user["role"]}
 
 
+@app.post("/api/auth/logout")
+async def logout(request: Request, response: Response):
+    token = request.cookies.get("session")
+    if token and token in _sessions:
+        del _sessions[token]
+    response.delete_cookie("session", path="/")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def me(user: dict = Depends(get_current_user)):
+    return user
+
+
+# ── User management ───────────────────────────────────────────
+@app.get("/api/users")
+async def list_users(_: dict = Depends(require_admin)):
+    users = _load_users()
+    return {"users": [
+        {"username": u["username"], "role": u["role"], "created_at": u.get("created_at", "")}
+        for u in users
+    ]}
+
+
+@app.post("/api/users", status_code=201)
+async def create_user(body: CreateUserRequest, current: dict = Depends(require_admin)):
+    if not _USERNAME_RE.match(body.username):
+        raise HTTPException(status_code=400, detail="Ungültiger Benutzername (3–32 Zeichen: a–z, 0–9, - oder _)")
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Passwort muss mindestens 8 Zeichen lang sein")
+    if body.role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="Ungültige Rolle (admin oder user)")
+    users = _load_users()
+    if any(u["username"] == body.username for u in users):
+        raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
+    new_user = {
+        "username": body.username,
+        "password_hash": pwd_context.hash(body.password),
+        "role": body.role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": current["username"],
+    }
+    users.append(new_user)
+    _save_users(users)
+    return {"username": new_user["username"], "role": new_user["role"], "created_at": new_user["created_at"]}
+
+
+@app.delete("/api/users/{username}", status_code=204)
+async def delete_user(username: str, current: dict = Depends(require_admin)):
+    if username == current["username"]:
+        raise HTTPException(status_code=400, detail="Der eigene Account kann nicht gelöscht werden")
+    users = _load_users()
+    new_users = [u for u in users if u["username"] != username]
+    if len(new_users) == len(users):
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    _save_users(new_users)
+    # Invalidate all sessions of the deleted user
+    to_delete = [t for t, s in list(_sessions.items()) if s["username"] == username]
+    for t in to_delete:
+        del _sessions[t]
+
+
+# ── Settings endpoints ────────────────────────────────────────
+@app.get("/api/settings")
+async def get_settings(_: dict = Depends(get_current_user)):
+    return _load_settings()
+
+
+@app.put("/api/settings")
+async def update_settings(body: UpdateSettingsRequest, _: dict = Depends(require_admin)):
+    settings = _load_settings()
+    for field in ("ollama_url", "default_model", "analyze_prompt", "explain_prompt"):
+        val = getattr(body, field)
+        if val is not None:
+            settings[field] = val
+    _save_settings(settings)
+    return settings
+
+
+# ── Core endpoints ────────────────────────────────────────────
 @app.get("/")
-async def root(_: Annotated[str, Depends(authenticate)]):
+async def root():
     return FileResponse("static/index.html")
 
 
 @app.post("/api/parse")
-async def parse_logs(request: ParseRequest, _: Annotated[str, Depends(authenticate)]):
+async def parse_logs(request: ParseRequest, _: dict = Depends(get_current_user)):
     try:
         return parse_ocpp_logs(request.log_content)
     except Exception as e:
@@ -412,7 +516,11 @@ async def parse_logs(request: ParseRequest, _: Annotated[str, Depends(authentica
 
 
 @app.get("/api/models")
-async def get_models(ollama_url: str = "http://localhost:11434", _: str = Depends(authenticate)):
+async def get_models(ollama_url: str = "", user: dict = Depends(get_current_user)):
+    settings = _load_settings()
+    # Non-admins always use the server-configured URL
+    if user["role"] != "admin" or not ollama_url:
+        ollama_url = settings.get("ollama_url", "http://localhost:11434")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{ollama_url}/api/tags")
@@ -428,10 +536,16 @@ async def get_models(ollama_url: str = "http://localhost:11434", _: str = Depend
 
 
 @app.post("/api/analyze")
-async def analyze_logs(request: AnalyzeRequest, _: Annotated[str, Depends(authenticate)]):
+async def analyze_logs(request: AnalyzeRequest, user: dict = Depends(get_current_user)):
     stats = request.parsed_data.get("stats", {})
     errors = request.parsed_data.get("errors", [])
     warnings = request.parsed_data.get("warnings", [])
+
+    # Non-admins use the server-configured ollama_url
+    ollama_url = request.ollama_url
+    if user["role"] != "admin":
+        settings = _load_settings()
+        ollama_url = settings.get("ollama_url", ollama_url)
 
     log_preview = (
         request.log_content[:6000]
@@ -498,7 +612,7 @@ Erstelle eine detaillierte, technisch fundierte Analyse mit konkreten Lösungsvo
             async with httpx.AsyncClient(timeout=180.0) as client:
                 async with client.stream(
                     "POST",
-                    f"{request.ollama_url}/api/generate",
+                    f"{ollama_url}/api/generate",
                     json={
                         "model": request.model,
                         "prompt": user_prompt,
@@ -520,13 +634,11 @@ Erstelle eine detaillierte, technisch fundierte Analyse mit konkreten Lösungsvo
         except Exception as e:
             yield f"\n\n**Fehler bei der KI-Analyse:** {str(e)}"
 
-    return StreamingResponse(
-        stream_response(), media_type="text/plain; charset=utf-8"
-    )
+    return StreamingResponse(stream_response(), media_type="text/plain; charset=utf-8")
 
 
 @app.get("/api/search-hardware")
-async def search_hardware(vendor: str = "", model: str = "", firmware: str = "", _: str = Depends(authenticate)):
+async def search_hardware(vendor: str = "", model: str = "", firmware: str = "", _: dict = Depends(get_current_user)):
     parts = [p for p in [vendor, model] if p.strip()]
     if not parts:
         raise HTTPException(status_code=400, detail="Kein Suchbegriff")
@@ -557,10 +669,16 @@ async def search_hardware(vendor: str = "", model: str = "", firmware: str = "",
 
 
 @app.post("/api/explain")
-async def explain(request: AnalyzeRequest, _: Annotated[str, Depends(authenticate)]):
+async def explain(request: AnalyzeRequest, user: dict = Depends(get_current_user)):
     stats    = request.parsed_data.get("stats", {})
     errors   = request.parsed_data.get("errors", [])
     warnings = request.parsed_data.get("warnings", [])
+
+    # Non-admins use the server-configured ollama_url
+    ollama_url = request.ollama_url
+    if user["role"] != "admin":
+        settings = _load_settings()
+        ollama_url = settings.get("ollama_url", ollama_url)
 
     customer_issue = request.customer_context.strip() or "allgemeine Log-Analyse"
 
@@ -634,7 +752,7 @@ Schreibe jetzt die strukturierte Erklärung mit allen vier Markdown-Abschnitten:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 async with client.stream(
                     "POST",
-                    f"{request.ollama_url}/api/generate",
+                    f"{ollama_url}/api/generate",
                     json={
                         "model": request.model,
                         "prompt": user_prompt,
@@ -656,6 +774,4 @@ Schreibe jetzt die strukturierte Erklärung mit allen vier Markdown-Abschnitten:
         except Exception as e:
             yield f"\n\n[Fehler bei der Erklärung: {str(e)}]"
 
-    return StreamingResponse(
-        stream_response(), media_type="text/plain; charset=utf-8"
-    )
+    return StreamingResponse(stream_response(), media_type="text/plain; charset=utf-8")
