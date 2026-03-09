@@ -1644,8 +1644,10 @@ function renderHistory(container, sessions) {
 }
 
 async function restoreSession(analyzeId, explainId) {
-  const analysisTab   = document.getElementById('tab-analysis');
+  const analysisTab    = document.getElementById('tab-analysis');
   const explanationTab = document.getElementById('tab-explanation');
+  const historyPanel   = document.getElementById('historyPanel');
+  const backdrop       = document.getElementById('modalBackdrop');
 
   let analyzeEntry = null;
   let explainEntry = null;
@@ -1690,8 +1692,9 @@ async function restoreSession(analyzeId, explainId) {
     explanationDone = true;
   }
 
-  // Schritt 3: Zum inhaltlichsten Tab springen
-  closePanels();
+  // Schritt 3: History-Panel schließen und zum richtigen Tab springen
+  if (historyPanel) historyPanel.classList.add('hidden');
+  if (backdrop)     backdrop.classList.remove('visible');
   if (analyzeEntry)      switchTab('analysis');
   else if (explainEntry) switchTab('explanation');
   else                   switchTab('issues');
