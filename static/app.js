@@ -14,6 +14,8 @@ let explanationDone        = false;
 let timelineChartInstance  = null;
 let lastParsedContent      = '';
 let currentUser            = null;
+let currentSessionId   = null;
+let currentAnalysisTitle = '';
 
 // --- DOM References ---
 const logInput        = document.getElementById('logInput');
@@ -38,6 +40,7 @@ const analyzePrompt      = document.getElementById('analyzePrompt');
 const explainPrompt      = document.getElementById('explainPrompt');
 const resetAnalyzePrompt = document.getElementById('resetAnalyzePrompt');
 const resetExplainPrompt = document.getElementById('resetExplainPrompt');
+const analysisTitle   = document.getElementById('analysisTitle');
 
 const DEFAULT_ANALYZE_PROMPT = `Du bist ein OCPP 1.6 Experte und Spezialist für Ladeinfrastruktur-Kommunikation.
 Analysiere die bereitgestellten OCPP-Logs und erstelle eine strukturierte Fehlerdiagnose auf Deutsch.
@@ -153,6 +156,7 @@ function hideLoginOverlay() {
 }
 
 async function initApp(user) {
+  currentSessionId = generateSessionId();
   await loadServerSettings(user);
 
   // Show/hide admin-only elements
@@ -323,7 +327,22 @@ function setupEventListeners() {
 
   settingsToggle.addEventListener('click', () => {
     settingsPanel.classList.toggle('hidden');
+    if (!settingsPanel.classList.contains('hidden')) {
+      historyPanel.classList.add('hidden');
+    }
   });
+
+  const historyToggle = document.getElementById('historyToggle');
+  const historyPanel  = document.getElementById('historyPanel');
+  if (historyToggle) {
+    historyToggle.addEventListener('click', () => {
+      historyPanel.classList.toggle('hidden');
+      if (!historyPanel.classList.contains('hidden')) {
+        settingsPanel.classList.add('hidden');
+        loadHistory();
+      }
+    });
+  }
 
   loadModelsBtn.addEventListener('click', loadModels);
 
@@ -397,10 +416,7 @@ function setupEventListeners() {
 
   // Tab switching
   document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      switchTab(tab.dataset.tab);
-      if (tab.dataset.tab === 'history') loadHistory();
-    });
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
 
   // Logout
@@ -1411,6 +1427,8 @@ const EMPTY_STATES = {
 // ============================================================
 function clearLog() {
   logInput.value = '';
+  currentSessionId = generateSessionId();
+  if (analysisTitle) analysisTitle.value = '';
   if (customerContext) customerContext.value = '';
   updateCharCount();
   markResultsDirty();
@@ -1477,7 +1495,23 @@ function showToast(message, type = 'info') {
 // ============================================================
 // Analysis History
 // ============================================================
+function generateSessionId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+}
+
+function getAnalysisTitle() {
+  const val = analysisTitle ? analysisTitle.value.trim() : '';
+  if (val) return val;
+  const now = new Date();
+  const d = now.toLocaleDateString('de', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const t = now.toLocaleTimeString('de', { hour: '2-digit', minute: '2-digit' });
+  const user = currentUser ? currentUser.username : '';
+  return `${d} ${t}${user ? ' – ' + user : ''}`;
+}
+
 async function saveAnalysis(type, model, stats, resultText, logSnippet) {
+  if (!currentSessionId) currentSessionId = generateSessionId();
+  const title = getAnalysisTitle();
   try {
     await apiFetch('/api/analyses', {
       method: 'POST',
@@ -1485,6 +1519,8 @@ async function saveAnalysis(type, model, stats, resultText, logSnippet) {
       body: JSON.stringify({
         type,
         model,
+        title,
+        session_id: currentSessionId,
         customer_context: customerContext ? customerContext.value.trim() : '',
         stats,
         result_text: resultText,
@@ -1497,61 +1533,74 @@ async function saveAnalysis(type, model, stats, resultText, logSnippet) {
 }
 
 async function loadHistory() {
-  const tab = document.getElementById('tab-history');
-  tab.innerHTML = '<div class="loading-state"><div class="loading-spinner-row"><div class="spinner"></div><span class="loading-msg">Lade Historie…</span></div></div>';
+  const container = document.getElementById('historyPanelContent');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state" style="padding:12px 0"><div class="loading-spinner-row"><div class="spinner"></div><span class="loading-msg">Lade Historie…</span></div></div>';
   try {
-    const res = await apiFetch('/api/analyses?limit=50');
+    const res = await apiFetch('/api/analyses?limit=100');
     if (!res.ok) throw new Error(res.statusText);
     const data = await res.json();
-    renderHistory(tab, data.analyses);
+    renderHistory(container, data.sessions);
   } catch (err) {
-    tab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Fehler beim Laden der Historie</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
+    container.innerHTML = `<div style="color:var(--error);padding:12px 0">Fehler: ${escapeHtml(err.message)}</div>`;
   }
 }
 
-function renderHistory(container, analyses) {
-  if (!analyses || analyses.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🕐</div><p class="empty-title">Noch keine Analysen gespeichert</p><p class="empty-sub">Abgeschlossene KI-Analysen und Erklärungen erscheinen hier</p></div>';
+function renderHistory(container, sessions) {
+  if (!sessions || sessions.length === 0) {
+    container.innerHTML = '<div style="padding:16px 0;color:var(--text-muted);text-align:center">Noch keine Analysen gespeichert</div>';
     return;
   }
 
-  const items = analyses.map(a => {
-    const date = new Date(a.created_at);
+  const items = sessions.map(s => {
+    const date = new Date(s.created_at);
     const dateStr = date.toLocaleDateString('de', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = date.toLocaleTimeString('de', { hour: '2-digit', minute: '2-digit' });
-    const typeLabel = a.type === 'analyze' ? 'KI-Analyse' : 'Erklärung';
-    const typeBadgeClass = a.type === 'analyze' ? 'type-error' : 'type-warning';
-    const stats = a.stats || {};
-    const context = a.customer_context ? `<div class="issue-detail" style="margin-top:4px">${escapeHtml(a.customer_context.substring(0, 100))}${a.customer_context.length > 100 ? '…' : ''}</div>` : '';
+    const hasAnalyze = s.entries.some(e => e.type === 'analyze');
+    const hasExplain = s.entries.some(e => e.type === 'explain');
+    const analyzeId  = s.entries.find(e => e.type === 'analyze')?.id;
+    const explainId  = s.entries.find(e => e.type === 'explain')?.id;
+
+    const typeBtns = [
+      hasAnalyze ? `<button class="history-type-btn" data-id="${analyzeId}" data-type="analyze">🤖 KI-Analyse</button>` : '',
+      hasExplain ? `<button class="history-type-btn" data-id="${explainId}" data-type="explain">💡 Erklärung</button>` : '',
+    ].filter(Boolean).join('');
 
     return `
-      <div class="issue-card ${typeBadgeClass}" style="cursor:pointer" data-history-id="${a.id}">
-        <div class="issue-icon">${a.type === 'analyze' ? '🤖' : '💡'}</div>
-        <div class="issue-body">
-          <div class="issue-message">
-            <strong>${escapeHtml(typeLabel)}</strong>
-            <span style="font-weight:400;color:var(--text-muted);margin-left:8px">${dateStr} ${timeStr}</span>
-            <span style="font-weight:400;color:var(--text-muted);margin-left:8px">· ${escapeHtml(a.model)}</span>
-            <span style="font-weight:400;color:var(--text-muted);margin-left:8px">· ${stats.total || 0} Msg, ${stats.errors || 0} Fehler</span>
-          </div>
-          ${context}
-          <div style="margin-top:8px;display:none" class="history-result-area" id="history-result-${a.id}"></div>
+      <div class="history-session" data-session="${escapeHtml(s.session_id)}">
+        <div class="history-session-header">
+          <span class="history-session-title">${escapeHtml(s.title)}</span>
+          <span class="history-session-meta">${dateStr} ${timeStr} · ${escapeHtml(s.created_by)} · ${escapeHtml(s.model)}</span>
+          <div class="history-type-btns">${typeBtns}</div>
         </div>
+        <div class="history-session-result hidden"></div>
       </div>`;
   }).join('');
 
-  container.innerHTML = `<div class="issues-list">${items}</div>`;
+  container.innerHTML = `<div class="history-session-list">${items}</div>`;
 
-  container.querySelectorAll('[data-history-id]').forEach(card => {
-    card.addEventListener('click', async () => {
-      const id = card.dataset.historyId;
-      const resultArea = card.querySelector('.history-result-area');
-      if (resultArea.style.display !== 'none') {
-        resultArea.style.display = 'none';
+  container.querySelectorAll('.history-type-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const sessionEl = btn.closest('.history-session');
+      const resultEl  = sessionEl.querySelector('.history-session-result');
+
+      // Toggle if same button clicked again
+      if (btn.classList.contains('active')) {
+        btn.classList.remove('active');
+        resultEl.classList.add('hidden');
+        resultEl.innerHTML = '';
         return;
       }
-      resultArea.innerHTML = '<div style="padding:8px;color:var(--text-muted)">Lade…</div>';
-      resultArea.style.display = 'block';
+
+      // Deactivate siblings
+      sessionEl.querySelectorAll('.history-type-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      resultEl.classList.remove('hidden');
+      resultEl.innerHTML = '<div style="padding:8px;color:var(--text-muted)">Lade…</div>';
+
       try {
         const res = await apiFetch(`/api/analyses/${id}`);
         if (!res.ok) throw new Error(res.statusText);
@@ -1559,9 +1608,9 @@ function renderHistory(container, analyses) {
         const html = (typeof marked !== 'undefined')
           ? marked.parse(entry.result_text || '')
           : `<pre>${escapeHtml(entry.result_text || '')}</pre>`;
-        resultArea.innerHTML = `<div class="analysis-content" style="margin-top:8px">${html}</div>`;
+        resultEl.innerHTML = `<div class="analysis-content history-result-content">${html}</div>`;
       } catch (err) {
-        resultArea.innerHTML = `<div style="color:var(--error)">Fehler: ${escapeHtml(err.message)}</div>`;
+        resultEl.innerHTML = `<div style="color:var(--error);padding:8px">Fehler: ${escapeHtml(err.message)}</div>`;
       }
     });
   });

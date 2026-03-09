@@ -159,6 +159,9 @@ async def _initialize_db():
                     log_snippet TEXT          NOT NULL DEFAULT ''
                 ) CHARACTER SET utf8mb4
             """)
+            # Migration: add new columns for existing DBs
+            await cur.execute("ALTER TABLE analyses ADD COLUMN IF NOT EXISTS title VARCHAR(256) NOT NULL DEFAULT ''")
+            await cur.execute("ALTER TABLE analyses ADD COLUMN IF NOT EXISTS session_id VARCHAR(64) NOT NULL DEFAULT ''")
         await conn.commit()
 
 
@@ -276,6 +279,8 @@ class UpdateSettingsRequest(BaseModel):
 class SaveAnalysisRequest(BaseModel):
     type: str
     model: str
+    title: str = ""
+    session_id: str = ""
     customer_context: str = ""
     stats: dict
     result_text: str
@@ -646,10 +651,10 @@ async def save_analysis(body: SaveAnalysisRequest, user: dict = Depends(get_curr
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "INSERT INTO analyses (type, created_at, created_by, model, customer_context, stats, result_text, log_snippet) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (body.type, created_at, user["username"], body.model, body.customer_context,
-                 json.dumps(body.stats, ensure_ascii=False), body.result_text, body.log_snippet),
+                "INSERT INTO analyses (type, created_at, created_by, model, title, session_id, customer_context, stats, result_text, log_snippet) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (body.type, created_at, user["username"], body.model, body.title, body.session_id,
+                 body.customer_context, json.dumps(body.stats, ensure_ascii=False), body.result_text, body.log_snippet),
             )
             analysis_id = cur.lastrowid
         await conn.commit()
@@ -657,17 +662,19 @@ async def save_analysis(body: SaveAnalysisRequest, user: dict = Depends(get_curr
 
 
 @app.get("/api/analyses")
-async def list_analyses(limit: int = 50, _: dict = Depends(get_current_user)):
+async def list_analyses(limit: int = 100, _: dict = Depends(get_current_user)):
     pool = await _get_db_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
-                "SELECT id, type, created_at, created_by, model, customer_context, stats, log_snippet "
+                "SELECT id, type, title, session_id, created_at, created_by, model, customer_context, stats "
                 "FROM analyses ORDER BY created_at DESC LIMIT %s",
                 (limit,)
             )
             rows = await cur.fetchall()
-    result = []
+
+    sessions: dict = {}
+    session_order: list = []
     for r in rows:
         row = dict(r)
         if isinstance(row.get("stats"), str):
@@ -677,8 +684,22 @@ async def list_analyses(limit: int = 50, _: dict = Depends(get_current_user)):
                 row["stats"] = {}
         if isinstance(row.get("created_at"), datetime):
             row["created_at"] = row["created_at"].isoformat()
-        result.append(row)
-    return {"analyses": result}
+        sid = row["session_id"] or str(row["id"])
+        if sid not in sessions:
+            session_order.append(sid)
+            sessions[sid] = {
+                "session_id": sid,
+                "title": row["title"] or row["created_at"],
+                "created_at": row["created_at"],
+                "created_by": row["created_by"],
+                "model": row["model"],
+                "customer_context": row["customer_context"],
+                "stats": row["stats"],
+                "entries": [],
+            }
+        sessions[sid]["entries"].append({"id": row["id"], "type": row["type"]})
+
+    return {"sessions": [sessions[sid] for sid in session_order]}
 
 
 @app.get("/api/analyses/{analysis_id}")
