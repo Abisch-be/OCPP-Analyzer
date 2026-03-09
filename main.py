@@ -570,27 +570,31 @@ async def create_user(body: CreateUserRequest, current: dict = Depends(require_a
     users = await _load_users()
     if any(u["username"] == body.username for u in users):
         raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
-    new_user = {
-        "username": body.username,
-        "password_hash": _hash_password(body.password),
-        "role": body.role,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "created_by": current["username"],
-    }
-    users.append(new_user)
-    await _save_users(users)
-    return {"username": new_user["username"], "role": new_user["role"], "created_at": new_user["created_at"]}
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO users (username, password_hash, role, created_at, created_by) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (body.username, _hash_password(body.password), body.role,
+                 created_at, current["username"]),
+            )
+        await conn.commit()
+    return {"username": body.username, "role": body.role, "created_at": created_at}
 
 
 @app.delete("/api/users/{username}", status_code=204)
 async def delete_user(username: str, current: dict = Depends(require_admin)):
     if username == current["username"]:
         raise HTTPException(status_code=400, detail="Der eigene Account kann nicht gelöscht werden")
-    users = await _load_users()
-    new_users = [u for u in users if u["username"] != username]
-    if len(new_users) == len(users):
-        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
-    await _save_users(new_users)
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("DELETE FROM users WHERE username=%s", (username,))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+        await conn.commit()
     # Note: stateless tokens cannot be actively revoked.
     # Deleted users' tokens expire naturally after SESSION_TTL_HOURS.
 
