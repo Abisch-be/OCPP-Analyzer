@@ -336,6 +336,31 @@ html, body {
   color: var(--ink-3);
 }
 
+.settings-save-status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--r);
+  transition: opacity 0.4s;
+}
+.settings-save-status.is-success {
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+}
+.settings-save-status.is-error {
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid var(--red-border);
+}
+
+.settings-prompts-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px 14px;
+}
+
 /* ── Workspace ──────────────────────────────────────────── */
 .workspace {
   display: grid;

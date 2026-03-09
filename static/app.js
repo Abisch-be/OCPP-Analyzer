@@ -153,9 +153,11 @@ async function initApp(user) {
   setupDragDrop();
   setupEventListeners();
 
-  // Show/hide admin section
+  // Show/hide admin-only elements
   if (user.role === 'admin') {
     document.getElementById('adminSection').classList.remove('hidden');
+    document.getElementById('promptsFooter').classList.remove('hidden');
+    document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
     loadAdminPanel();
   }
 
@@ -217,23 +219,37 @@ async function loadServerSettings(user) {
 async function saveSettings() {
   // Model selection always saved in localStorage
   if (modelSelect.value) localStorage.setItem('ollama_model', modelSelect.value);
+}
 
-  // Admins save URL and prompts to server
-  if (currentUser && currentUser.role === 'admin') {
-    try {
-      await apiFetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ollama_url:     ollamaUrl.value.trim(),
-          analyze_prompt: analyzePrompt.value,
-          explain_prompt: explainPrompt.value,
-        }),
-      });
-    } catch {
-      // fire-and-forget; toast shown by apiFetch on 401 already
+async function saveSettingsToServer(payload, statusEl) {
+  statusEl.textContent = '';
+  statusEl.className = 'settings-save-status';
+  try {
+    const res = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      showSaveStatus(statusEl, 'Gespeichert', 'success');
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showSaveStatus(statusEl, err.detail || 'Fehler', 'error');
+    }
+  } catch (err) {
+    if (err.message !== 'Sitzung abgelaufen – bitte neu anmelden') {
+      showSaveStatus(statusEl, 'Fehler: ' + err.message, 'error');
     }
   }
+}
+
+function showSaveStatus(el, text, type) {
+  el.textContent = text;
+  el.className = 'settings-save-status is-' + type;
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => { el.textContent = ''; el.className = 'settings-save-status'; el.style.opacity = ''; }, 400);
+  }, 3000);
 }
 
 // ============================================================
@@ -313,13 +329,37 @@ function setupEventListeners() {
 
   loadModelsBtn.addEventListener('click', loadModels);
 
-  ollamaUrl.addEventListener('change', saveSettings);
   modelSelect.addEventListener('change', saveSettings);
 
-  resetAnalyzePrompt.addEventListener('click', () => { analyzePrompt.value = DEFAULT_ANALYZE_PROMPT; saveSettings(); });
-  resetExplainPrompt.addEventListener('click', () => { explainPrompt.value = DEFAULT_EXPLAIN_PROMPT; saveSettings(); });
-  analyzePrompt.addEventListener('change', saveSettings);
-  explainPrompt.addEventListener('change', saveSettings);
+  // Explicit save buttons (admin only)
+  const saveUrlBtn      = document.getElementById('saveUrlBtn');
+  const urlSaveStatus   = document.getElementById('urlSaveStatus');
+  const savePromptsBtn  = document.getElementById('savePromptsBtn');
+  const promptsSaveStatus = document.getElementById('promptsSaveStatus');
+
+  if (saveUrlBtn) {
+    saveUrlBtn.addEventListener('click', () => {
+      saveSettingsToServer({ ollama_url: ollamaUrl.value.trim() }, urlSaveStatus);
+    });
+  }
+
+  if (savePromptsBtn) {
+    savePromptsBtn.addEventListener('click', () => {
+      saveSettingsToServer({
+        analyze_prompt: analyzePrompt.value,
+        explain_prompt: explainPrompt.value,
+      }, promptsSaveStatus);
+    });
+  }
+
+  resetAnalyzePrompt.addEventListener('click', () => {
+    analyzePrompt.value = DEFAULT_ANALYZE_PROMPT;
+    if (promptsSaveStatus) showSaveStatus(promptsSaveStatus, 'Zurückgesetzt – bitte speichern', 'error');
+  });
+  resetExplainPrompt.addEventListener('click', () => {
+    explainPrompt.value = DEFAULT_EXPLAIN_PROMPT;
+    if (promptsSaveStatus) showSaveStatus(promptsSaveStatus, 'Zurückgesetzt – bitte speichern', 'error');
+  });
 
   // Admin: create user
   const createUserBtn = document.getElementById('createUserBtn');
