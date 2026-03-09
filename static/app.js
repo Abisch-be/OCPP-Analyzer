@@ -1664,7 +1664,15 @@ async function restoreSession(analyzeId, explainId) {
     return;
   }
 
-  // Restore parsedData state from whichever entry has it
+  // Schritt 1: Alle Tabs leeren (Session-Isolation)
+  if (analysisTab)    { analysisTab.innerHTML = '';    analysisDone    = false; }
+  if (explanationTab) { explanationTab.innerHTML = ''; explanationDone = false; }
+  parsedData = null;
+  displayMessages([]);
+  displayIssues([], []);
+  updateStats({ errors: 0, warnings: 0, total: 0, calls: 0, callresults: 0, callerrors: 0 });
+
+  // Schritt 2: Inhalte der gewählten Session befüllen
   const sourceEntry = analyzeEntry || explainEntry;
   if (sourceEntry && sourceEntry.parsed_data && Object.keys(sourceEntry.parsed_data).length > 0) {
     parsedData = sourceEntry.parsed_data;
@@ -1682,8 +1690,11 @@ async function restoreSession(analyzeId, explainId) {
     explanationDone = true;
   }
 
+  // Schritt 3: Zum inhaltlichsten Tab springen
   closePanels();
-  switchTab('issues');
+  if (analyzeEntry)      switchTab('analysis');
+  else if (explainEntry) switchTab('explanation');
+  else                   switchTab('issues');
   showToast('Analyse wiederhergestellt', 'success');
 }
 
