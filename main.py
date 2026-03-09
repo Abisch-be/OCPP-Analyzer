@@ -55,6 +55,13 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 
 SESSION_TTL_HOURS = 8
 # Stateless signed tokens – work across serverless instances, no shared state needed.
+if "SESSION_SECRET" not in os.environ:
+    import warnings
+    warnings.warn(
+        "SESSION_SECRET not set – a new random key will be generated on every cold start, "
+        "invalidating all sessions! Set SESSION_SECRET as an environment variable.",
+        stacklevel=1,
+    )
 _SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32)).encode()
 
 _PBKDF2_ITERATIONS = 260_000
@@ -469,9 +476,6 @@ async def login(body: LoginRequest, response: Response):
 
 @app.post("/api/auth/logout")
 async def logout(request: Request, response: Response):
-    token = request.cookies.get("session")
-    if token and token in _sessions:
-        del _sessions[token]
     response.delete_cookie("session", path="/")
     return {"ok": True}
 

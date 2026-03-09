@@ -78,6 +78,10 @@ Allgemeine Regeln:
 
 // --- Initialization ---
 window.addEventListener('DOMContentLoaded', async () => {
+  // Event listeners and drag-drop are set up once – never re-added on re-login
+  setupDragDrop();
+  setupEventListeners();
+
   // Login form handler always active, regardless of auth state
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -150,8 +154,6 @@ function hideLoginOverlay() {
 
 async function initApp(user) {
   await loadServerSettings(user);
-  setupDragDrop();
-  setupEventListeners();
 
   // Show/hide admin-only elements
   if (user.role === 'admin') {
@@ -161,23 +163,12 @@ async function initApp(user) {
     loadAdminPanel();
   }
 
-  // Header: user label + logout button (only attach logout listener once)
+  // Header: user label + logout button
   const label = document.getElementById('currentUserLabel');
   const logoutBtn = document.getElementById('logoutBtn');
   label.textContent = user.username;
   label.classList.remove('hidden');
   logoutBtn.style.display = '';
-  if (!logoutBtn._listenerAdded) {
-    logoutBtn._listenerAdded = true;
-    logoutBtn.addEventListener('click', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      currentUser = null;
-      label.classList.add('hidden');
-      logoutBtn.style.display = 'none';
-      document.getElementById('adminSection').classList.add('hidden');
-      showLoginOverlay();
-    });
-  }
 }
 
 // ============================================================
@@ -188,7 +179,7 @@ async function loadServerSettings(user) {
     const res = await apiFetch('/api/settings');
     const settings = await res.json();
 
-    ollamaUrl.value     = settings.ollama_url     || 'http://localhost:11434';
+    ollamaUrl.value     = settings.ollama_url     || localStorage.getItem('ollama_url') || 'http://localhost:11434';
     analyzePrompt.value = settings.analyze_prompt || DEFAULT_ANALYZE_PROMPT;
     explainPrompt.value = settings.explain_prompt || DEFAULT_EXPLAIN_PROMPT;
 
@@ -231,6 +222,7 @@ async function saveSettingsToServer(payload, statusEl) {
       body: JSON.stringify(payload),
     });
     if (res.ok) {
+      if (payload.ollama_url) localStorage.setItem('ollama_url', payload.ollama_url);
       showSaveStatus(statusEl, 'Gespeichert', 'success');
     } else {
       const err = await res.json().catch(() => ({}));
@@ -401,6 +393,19 @@ function setupEventListeners() {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
+
+  // Logout
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      currentUser = null;
+      document.getElementById('currentUserLabel').classList.add('hidden');
+      logoutBtn.style.display = 'none';
+      document.getElementById('adminSection').classList.add('hidden');
+      showLoginOverlay();
+    });
+  }
 }
 
 // ============================================================
