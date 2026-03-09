@@ -153,15 +153,23 @@ async def _initialize_db():
                     created_at  DATETIME(6)   NOT NULL,
                     created_by  VARCHAR(64)   NOT NULL,
                     model       VARCHAR(256)  NOT NULL DEFAULT '',
+                    title       VARCHAR(256)  NOT NULL DEFAULT '',
+                    session_id  VARCHAR(64)   NOT NULL DEFAULT '',
                     customer_context TEXT     NOT NULL DEFAULT '',
                     stats       JSON          NOT NULL,
                     result_text LONGTEXT      NOT NULL,
                     log_snippet TEXT          NOT NULL DEFAULT ''
                 ) CHARACTER SET utf8mb4
             """)
-            # Migration: add new columns for existing DBs
-            await cur.execute("ALTER TABLE analyses ADD COLUMN IF NOT EXISTS title VARCHAR(256) NOT NULL DEFAULT ''")
-            await cur.execute("ALTER TABLE analyses ADD COLUMN IF NOT EXISTS session_id VARCHAR(64) NOT NULL DEFAULT ''")
+            # Migration: add new columns for existing DBs (try/except for MySQL 5.7 compatibility)
+            for _col, _defn in [
+                ("`title`",      "VARCHAR(256) NOT NULL DEFAULT ''"),
+                ("`session_id`", "VARCHAR(64)  NOT NULL DEFAULT ''"),
+            ]:
+                try:
+                    await cur.execute(f"ALTER TABLE analyses ADD COLUMN {_col} {_defn}")
+                except Exception:
+                    pass  # Column already exists
         await conn.commit()
 
 
