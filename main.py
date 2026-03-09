@@ -724,7 +724,7 @@ async def get_analysis(analysis_id: int, _: dict = Depends(get_current_user)):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
-                "SELECT id, type, created_at, created_by, model, customer_context, stats, result_text, log_snippet, parsed_data "
+                "SELECT id, type, created_at, created_by, model, title, customer_context, stats, result_text, log_snippet, parsed_data "
                 "FROM analyses WHERE id = %s",
                 (analysis_id,)
             )

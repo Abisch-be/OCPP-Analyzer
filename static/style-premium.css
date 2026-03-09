@@ -538,11 +538,10 @@ html, body {
 
 /* ── Result title bar ───────────────────────────────────── */
 .result-title-bar {
-  padding: 6px 24px;
-  font-size: 0.78rem;
+  padding: 7px 24px;
+  font-size: 0.85rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-align: center;
   color: var(--ink-2);
   background: var(--surface-2, var(--surface));
   border-bottom: 1px solid var(--line);
