@@ -536,6 +536,22 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Result title bar ───────────────────────────────────── */
+.result-title-bar {
+  padding: 6px 24px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--surface-2, var(--surface));
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Tabs ───────────────────────────────────────────────── */
 .output-tabs {
   display: flex;

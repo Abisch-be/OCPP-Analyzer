@@ -1143,6 +1143,7 @@ async function analyzeLogs() {
     showToast('✅ KI-Analyse abgeschlossen', 'success');
     success = true;
     analysisDone = true;
+    showResultTitle(analysisTitle ? analysisTitle.value : '');
     saveAnalysis('analyze', model, parsedData.stats, fullText, content.substring(0, 500));
   } catch (err) {
     stopAnalysisTimer();
@@ -1358,6 +1359,7 @@ async function draftExplanation() {
     showToast('✅ Zusammenfassung erstellt', 'success');
     success = true;
     explanationDone = true;
+    showResultTitle(analysisTitle ? analysisTitle.value : '');
     saveAnalysis('explain', model, parsedData.stats, explanationText, content.substring(0, 500));
   } catch (err) {
     stopExplanationTimer();
@@ -1447,6 +1449,7 @@ function clearLog() {
   if (customerContext) { customerContext.value  = ''; customerContext.disabled = false; }
   const banner = document.getElementById('historyModeBanner');
   if (banner) banner.remove();
+  showResultTitle('');
   currentSessionId = generateSessionId();
   updateCharCount();
   markResultsDirty();
@@ -1708,7 +1711,10 @@ async function restoreSession(analyzeId, explainId) {
     logInput.parentElement.insertBefore(banner, logInput);
   }
 
-  // Schritt 4: History-Panel schließen und zum richtigen Tab springen
+  // Schritt 4: Titel auf der rechten Seite anzeigen
+  showResultTitle(sourceEntry ? sourceEntry.title : '');
+
+  // Schritt 5: History-Panel schließen und zum richtigen Tab springen
   if (historyPanel) historyPanel.classList.add('hidden');
   if (backdrop)     backdrop.classList.remove('visible');
   if (analyzeEntry)      switchTab('analysis');
@@ -1720,6 +1726,18 @@ async function restoreSession(analyzeId, explainId) {
 // ============================================================
 // Helpers
 // ============================================================
+function showResultTitle(title) {
+  const el = document.getElementById('resultTitle');
+  if (!el) return;
+  if (title && title.trim()) {
+    el.textContent = title.trim();
+    el.classList.remove('hidden');
+  } else {
+    el.textContent = '';
+    el.classList.add('hidden');
+  }
+}
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)

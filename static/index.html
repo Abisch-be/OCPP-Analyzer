@@ -156,6 +156,11 @@
         </div>
 
         <div class="input-section">
+          <label class="section-eyebrow">Titel <span class="optional-tag">optional</span></label>
+          <input id="analysisTitle" type="text" class="settings-input" placeholder="z.B. Kunde Müller, Ladestation #3" maxlength="128">
+        </div>
+
+        <div class="input-section">
           <label class="section-eyebrow">Kundenmeldung <span class="optional-tag">optional</span></label>
           <textarea
             id="customerContext"
@@ -177,7 +182,6 @@
         </div>
 
         <div class="action-footer">
-          <input id="analysisTitle" type="text" class="settings-input" placeholder="Titel (optional) – z.B. Kunde Müller, Ladestation #3" maxlength="128">
           <button id="parseBtn" class="action-secondary action-full">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Parse
@@ -197,6 +201,8 @@
 
       <!-- Output column -->
       <div class="output-col">
+
+        <div id="resultTitle" class="result-title-bar hidden"></div>
 
         <div class="tabs output-tabs">
           <button class="tab active" data-tab="issues">
