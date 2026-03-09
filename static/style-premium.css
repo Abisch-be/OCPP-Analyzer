@@ -411,6 +411,29 @@ html, body {
   border-right: 1px solid var(--line);
   overflow: hidden;
   min-height: 0;
+  position: relative;
+}
+
+.history-mode-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 24px;
+}
+
+.history-mode-overlay-text {
+  font-size: 0.88rem;
+  color: var(--ink-2);
+  line-height: 1.6;
+  margin: 0;
 }
 
 .input-section {

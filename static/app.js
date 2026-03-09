@@ -324,6 +324,8 @@ function setupEventListeners() {
   explanationBtn.addEventListener('click', draftExplanation);
   exampleBtn.addEventListener('click', loadExample);
   clearBtn.addEventListener('click', clearLog);
+  const clearFromOverlayBtn = document.getElementById('clearFromOverlayBtn');
+  if (clearFromOverlayBtn) clearFromOverlayBtn.addEventListener('click', clearLog);
 
   const backdrop     = document.getElementById('modalBackdrop');
   const historyToggle = document.getElementById('historyToggle');
@@ -1447,8 +1449,8 @@ function clearLog() {
   logInput.disabled = false;
   if (analysisTitle)   { analysisTitle.value   = ''; analysisTitle.disabled   = false; }
   if (customerContext) { customerContext.value  = ''; customerContext.disabled = false; }
-  const banner = document.getElementById('historyModeBanner');
-  if (banner) banner.remove();
+  const overlay = document.getElementById('historyModeOverlay');
+  if (overlay) overlay.classList.add('hidden');
   showResultTitle('');
   currentSessionId = generateSessionId();
   updateCharCount();
@@ -1698,18 +1700,9 @@ async function restoreSession(analyzeId, explainId) {
     explanationDone = true;
   }
 
-  // Schritt 3: Eingabefelder sperren (Historie-Modus)
-  logInput.disabled = true;
-  if (analysisTitle)   analysisTitle.disabled   = true;
-  if (customerContext) customerContext.disabled  = true;
-  let banner = document.getElementById('historyModeBanner');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'historyModeBanner';
-    banner.style.cssText = 'background:var(--warning,#f59e0b);color:#000;padding:6px 12px;font-size:0.82rem;text-align:center;border-radius:4px;margin-bottom:8px;';
-    banner.textContent = 'Historie geladen – Log leeren für neue Analyse';
-    logInput.parentElement.insertBefore(banner, logInput);
-  }
+  // Schritt 3: Linke Seite mit Overlay sperren (Historie-Modus)
+  const overlay = document.getElementById('historyModeOverlay');
+  if (overlay) overlay.classList.remove('hidden');
 
   // Schritt 4: Titel auf der rechten Seite anzeigen
   showResultTitle(sourceEntry ? sourceEntry.title : '');

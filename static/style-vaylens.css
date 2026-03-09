@@ -258,7 +258,29 @@ body {
 }
 
 .panel { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-.left-panel { border-right: 1px solid var(--border); background: var(--surface); }
+.left-panel { border-right: 1px solid var(--border); background: var(--surface); position: relative; }
+
+.history-mode-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 24px;
+}
+
+.history-mode-overlay-text {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
 .right-panel { background: var(--bg); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
 /* ============================================================
