@@ -113,6 +113,7 @@ async def _initialize_db():
     pool = await _get_db_pool()
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
+            await cur.execute("SET SESSION sql_notes=0")
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS settings (
                     id INT PRIMARY KEY DEFAULT 1,
