@@ -1540,6 +1540,7 @@ async function saveAnalysis(type, model, stats, resultText, logSnippet) {
         stats,
         result_text: resultText,
         log_snippet: logSnippet,
+        parsed_data: parsedData || {},
       }),
     });
   } catch {
@@ -1581,12 +1582,14 @@ function renderHistory(container, sessions) {
       hasExplain ? `<button class="history-type-btn" data-id="${explainId}" data-type="explain">💡 Erklärung</button>` : '',
     ].filter(Boolean).join('');
 
+    const restoreBtn = `<button class="history-restore-btn" data-analyze-id="${analyzeId || ''}" data-explain-id="${explainId || ''}">↩ In Tabs laden</button>`;
+
     return `
       <div class="history-session" data-session="${escapeHtml(s.session_id)}">
         <div class="history-session-header">
           <span class="history-session-title">${escapeHtml(s.title)}</span>
           <span class="history-session-meta">${dateStr} ${timeStr} · ${escapeHtml(s.created_by)} · ${escapeHtml(s.model)}</span>
-          <div class="history-type-btns">${typeBtns}</div>
+          <div class="history-type-btns">${typeBtns}${restoreBtn}</div>
         </div>
         <div class="history-session-result hidden"></div>
       </div>`;
@@ -1629,6 +1632,59 @@ function renderHistory(container, sessions) {
       }
     });
   });
+
+  container.querySelectorAll('.history-restore-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const analyzeId = btn.dataset.analyzeId || '';
+      const explainId = btn.dataset.explainId || '';
+      await restoreSession(analyzeId, explainId);
+    });
+  });
+}
+
+async function restoreSession(analyzeId, explainId) {
+  const analysisTab   = document.getElementById('tab-analysis');
+  const explanationTab = document.getElementById('tab-explanation');
+
+  let analyzeEntry = null;
+  let explainEntry = null;
+
+  try {
+    if (analyzeId) {
+      const res = await apiFetch(`/api/analyses/${analyzeId}`);
+      if (res.ok) analyzeEntry = await res.json();
+    }
+    if (explainId) {
+      const res = await apiFetch(`/api/analyses/${explainId}`);
+      if (res.ok) explainEntry = await res.json();
+    }
+  } catch (err) {
+    showToast('Fehler beim Laden: ' + err.message, 'error');
+    return;
+  }
+
+  // Restore parsedData state from whichever entry has it
+  const sourceEntry = analyzeEntry || explainEntry;
+  if (sourceEntry && sourceEntry.parsed_data && Object.keys(sourceEntry.parsed_data).length > 0) {
+    parsedData = sourceEntry.parsed_data;
+    displayMessages(parsedData.messages || []);
+    displayIssues(parsedData.errors || [], parsedData.warnings || []);
+    updateStats(parsedData.stats || { errors: 0, warnings: 0, total: 0, calls: 0, callresults: 0, callerrors: 0 });
+  }
+
+  if (analyzeEntry && analysisTab) {
+    renderAnalysis(analysisTab, analyzeEntry.result_text || '', false);
+    analysisDone = true;
+  }
+  if (explainEntry && explanationTab) {
+    renderExplanation(explanationTab, explainEntry.result_text || '', false);
+    explanationDone = true;
+  }
+
+  closePanels();
+  switchTab('issues');
+  showToast('Analyse wiederhergestellt', 'success');
 }
 
 // ============================================================

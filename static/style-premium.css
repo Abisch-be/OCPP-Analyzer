@@ -1684,6 +1684,26 @@ details[open] .issue-chevron { transform: rotate(45deg); margin-top: 0; margin-b
   color: #fff;
 }
 
+.history-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border: 1px solid var(--blue, #3b82f6);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--blue, #3b82f6);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+.history-restore-btn:hover {
+  background: var(--blue, #3b82f6);
+  color: #fff;
+}
+
 .history-session-result {
   border-top: 1px solid var(--line-soft);
   max-height: 55vh;

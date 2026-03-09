@@ -159,13 +159,15 @@ async def _initialize_db():
                         customer_context TEXT     NOT NULL DEFAULT '',
                         stats       MEDIUMTEXT    NOT NULL DEFAULT '{}',
                         result_text LONGTEXT      NOT NULL DEFAULT '',
-                        log_snippet TEXT          NOT NULL DEFAULT ''
+                        log_snippet TEXT          NOT NULL DEFAULT '',
+                        parsed_data LONGTEXT      NOT NULL DEFAULT '{}'
                     ) CHARACTER SET utf8mb4
                 """)
                 # Migration: add new columns for existing DBs
                 for _col, _defn in [
-                    ("`title`",      "VARCHAR(256) NOT NULL DEFAULT ''"),
-                    ("`session_id`", "VARCHAR(64)  NOT NULL DEFAULT ''"),
+                    ("`title`",       "VARCHAR(256) NOT NULL DEFAULT ''"),
+                    ("`session_id`",  "VARCHAR(64)  NOT NULL DEFAULT ''"),
+                    ("`parsed_data`", "LONGTEXT NOT NULL DEFAULT '{}'"),
                 ]:
                     try:
                         await cur.execute(f"ALTER TABLE analyses ADD COLUMN {_col} {_defn}")
@@ -296,6 +298,7 @@ class SaveAnalysisRequest(BaseModel):
     stats: dict
     result_text: str
     log_snippet: str = ""
+    parsed_data: dict = {}
 
 
 class ParseRequest(BaseModel):
@@ -662,10 +665,11 @@ async def save_analysis(body: SaveAnalysisRequest, user: dict = Depends(get_curr
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "INSERT INTO analyses (type, created_at, created_by, model, title, session_id, customer_context, stats, result_text, log_snippet) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO analyses (type, created_at, created_by, model, title, session_id, customer_context, stats, result_text, log_snippet, parsed_data) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (body.type, created_at, user["username"], body.model, body.title, body.session_id,
-                 body.customer_context, json.dumps(body.stats, ensure_ascii=False), body.result_text, body.log_snippet),
+                 body.customer_context, json.dumps(body.stats, ensure_ascii=False), body.result_text, body.log_snippet,
+                 json.dumps(body.parsed_data, ensure_ascii=False)),
             )
             analysis_id = cur.lastrowid
         await conn.commit()
@@ -719,7 +723,7 @@ async def get_analysis(analysis_id: int, _: dict = Depends(get_current_user)):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
-                "SELECT id, type, created_at, created_by, model, customer_context, stats, result_text, log_snippet "
+                "SELECT id, type, created_at, created_by, model, customer_context, stats, result_text, log_snippet, parsed_data "
                 "FROM analyses WHERE id = %s",
                 (analysis_id,)
             )
@@ -732,6 +736,11 @@ async def get_analysis(analysis_id: int, _: dict = Depends(get_current_user)):
             row["stats"] = json.loads(row["stats"])
         except Exception:
             row["stats"] = {}
+    if isinstance(row.get("parsed_data"), str):
+        try:
+            row["parsed_data"] = json.loads(row["parsed_data"])
+        except Exception:
+            row["parsed_data"] = {}
     if isinstance(row.get("created_at"), datetime):
         row["created_at"] = row["created_at"].isoformat()
     return row
