@@ -397,7 +397,10 @@ function setupEventListeners() {
 
   // Tab switching
   document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+    tab.addEventListener('click', () => {
+      switchTab(tab.dataset.tab);
+      if (tab.dataset.tab === 'history') loadHistory();
+    });
   });
 
   // Logout
@@ -1109,6 +1112,7 @@ async function analyzeLogs() {
     showToast('✅ KI-Analyse abgeschlossen', 'success');
     success = true;
     analysisDone = true;
+    saveAnalysis('analyze', model, parsedData.stats, fullText, content.substring(0, 500));
   } catch (err) {
     stopAnalysisTimer();
     analysisTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Analyse fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
@@ -1323,6 +1327,7 @@ async function draftExplanation() {
     showToast('✅ Zusammenfassung erstellt', 'success');
     success = true;
     explanationDone = true;
+    saveAnalysis('explain', model, parsedData.stats, explanationText, content.substring(0, 500));
   } catch (err) {
     stopExplanationTimer();
     explanationTab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Zusammenfassung fehlgeschlagen</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
@@ -1467,6 +1472,99 @@ function showToast(message, type = 'info') {
   toast.textContent = message;
   toastContainer.appendChild(toast);
   setTimeout(() => toast.remove(), 4000);
+}
+
+// ============================================================
+// Analysis History
+// ============================================================
+async function saveAnalysis(type, model, stats, resultText, logSnippet) {
+  try {
+    await apiFetch('/api/analyses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type,
+        model,
+        customer_context: customerContext ? customerContext.value.trim() : '',
+        stats,
+        result_text: resultText,
+        log_snippet: logSnippet,
+      }),
+    });
+  } catch {
+    // History saving is best-effort; don't disturb the user on failure
+  }
+}
+
+async function loadHistory() {
+  const tab = document.getElementById('tab-history');
+  tab.innerHTML = '<div class="loading-state"><div class="loading-spinner-row"><div class="spinner"></div><span class="loading-msg">Lade Historie…</span></div></div>';
+  try {
+    const res = await apiFetch('/api/analyses?limit=50');
+    if (!res.ok) throw new Error(res.statusText);
+    const data = await res.json();
+    renderHistory(tab, data.analyses);
+  } catch (err) {
+    tab.innerHTML = `<div class="issue-card type-error"><div class="issue-icon">🔴</div><div class="issue-body"><div class="issue-message">Fehler beim Laden der Historie</div><div class="issue-detail">${escapeHtml(err.message)}</div></div></div>`;
+  }
+}
+
+function renderHistory(container, analyses) {
+  if (!analyses || analyses.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🕐</div><p class="empty-title">Noch keine Analysen gespeichert</p><p class="empty-sub">Abgeschlossene KI-Analysen und Erklärungen erscheinen hier</p></div>';
+    return;
+  }
+
+  const items = analyses.map(a => {
+    const date = new Date(a.created_at);
+    const dateStr = date.toLocaleDateString('de', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = date.toLocaleTimeString('de', { hour: '2-digit', minute: '2-digit' });
+    const typeLabel = a.type === 'analyze' ? 'KI-Analyse' : 'Erklärung';
+    const typeBadgeClass = a.type === 'analyze' ? 'type-error' : 'type-warning';
+    const stats = a.stats || {};
+    const context = a.customer_context ? `<div class="issue-detail" style="margin-top:4px">${escapeHtml(a.customer_context.substring(0, 100))}${a.customer_context.length > 100 ? '…' : ''}</div>` : '';
+
+    return `
+      <div class="issue-card ${typeBadgeClass}" style="cursor:pointer" data-history-id="${a.id}">
+        <div class="issue-icon">${a.type === 'analyze' ? '🤖' : '💡'}</div>
+        <div class="issue-body">
+          <div class="issue-message">
+            <strong>${escapeHtml(typeLabel)}</strong>
+            <span style="font-weight:400;color:var(--text-muted);margin-left:8px">${dateStr} ${timeStr}</span>
+            <span style="font-weight:400;color:var(--text-muted);margin-left:8px">· ${escapeHtml(a.model)}</span>
+            <span style="font-weight:400;color:var(--text-muted);margin-left:8px">· ${stats.total || 0} Msg, ${stats.errors || 0} Fehler</span>
+          </div>
+          ${context}
+          <div style="margin-top:8px;display:none" class="history-result-area" id="history-result-${a.id}"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="issues-list">${items}</div>`;
+
+  container.querySelectorAll('[data-history-id]').forEach(card => {
+    card.addEventListener('click', async () => {
+      const id = card.dataset.historyId;
+      const resultArea = card.querySelector('.history-result-area');
+      if (resultArea.style.display !== 'none') {
+        resultArea.style.display = 'none';
+        return;
+      }
+      resultArea.innerHTML = '<div style="padding:8px;color:var(--text-muted)">Lade…</div>';
+      resultArea.style.display = 'block';
+      try {
+        const res = await apiFetch(`/api/analyses/${id}`);
+        if (!res.ok) throw new Error(res.statusText);
+        const entry = await res.json();
+        const html = (typeof marked !== 'undefined')
+          ? marked.parse(entry.result_text || '')
+          : `<pre>${escapeHtml(entry.result_text || '')}</pre>`;
+        resultArea.innerHTML = `<div class="analysis-content" style="margin-top:8px">${html}</div>`;
+      } catch (err) {
+        resultArea.innerHTML = `<div style="color:var(--error)">Fehler: ${escapeHtml(err.message)}</div>`;
+      }
+    });
+  });
 }
 
 // ============================================================

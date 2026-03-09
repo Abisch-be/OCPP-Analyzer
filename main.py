@@ -146,6 +146,19 @@ async def _initialize_db():
                      datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")),
                 )
                 print(f"[startup] Admin user '{username}' created from env vars.")
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS analyses (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    type        VARCHAR(16)   NOT NULL,
+                    created_at  DATETIME(6)   NOT NULL,
+                    created_by  VARCHAR(64)   NOT NULL,
+                    model       VARCHAR(256)  NOT NULL DEFAULT '',
+                    customer_context TEXT     NOT NULL DEFAULT '',
+                    stats       JSON          NOT NULL,
+                    result_text LONGTEXT      NOT NULL,
+                    log_snippet TEXT          NOT NULL DEFAULT ''
+                ) CHARACTER SET utf8mb4
+            """)
         await conn.commit()
 
 
@@ -258,6 +271,15 @@ class UpdateSettingsRequest(BaseModel):
     default_model: Optional[str] = None
     analyze_prompt: Optional[str] = None
     explain_prompt: Optional[str] = None
+
+
+class SaveAnalysisRequest(BaseModel):
+    type: str
+    model: str
+    customer_context: str = ""
+    stats: dict
+    result_text: str
+    log_snippet: str = ""
 
 
 class ParseRequest(BaseModel):
@@ -614,6 +636,73 @@ async def update_settings(body: UpdateSettingsRequest, _: dict = Depends(require
             settings[field] = val
     await _save_settings(settings)
     return settings
+
+
+# ── Analyses history endpoints ────────────────────────────────
+@app.post("/api/analyses", status_code=201)
+async def save_analysis(body: SaveAnalysisRequest, user: dict = Depends(get_current_user)):
+    pool = await _get_db_pool()
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO analyses (type, created_at, created_by, model, customer_context, stats, result_text, log_snippet) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (body.type, created_at, user["username"], body.model, body.customer_context,
+                 json.dumps(body.stats, ensure_ascii=False), body.result_text, body.log_snippet),
+            )
+            analysis_id = cur.lastrowid
+        await conn.commit()
+    return {"id": analysis_id, "created_at": created_at}
+
+
+@app.get("/api/analyses")
+async def list_analyses(limit: int = 50, _: dict = Depends(get_current_user)):
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(
+                "SELECT id, type, created_at, created_by, model, customer_context, stats, log_snippet "
+                "FROM analyses ORDER BY created_at DESC LIMIT %s",
+                (limit,)
+            )
+            rows = await cur.fetchall()
+    result = []
+    for r in rows:
+        row = dict(r)
+        if isinstance(row.get("stats"), str):
+            try:
+                row["stats"] = json.loads(row["stats"])
+            except Exception:
+                row["stats"] = {}
+        if isinstance(row.get("created_at"), datetime):
+            row["created_at"] = row["created_at"].isoformat()
+        result.append(row)
+    return {"analyses": result}
+
+
+@app.get("/api/analyses/{analysis_id}")
+async def get_analysis(analysis_id: int, _: dict = Depends(get_current_user)):
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(
+                "SELECT id, type, created_at, created_by, model, customer_context, stats, result_text, log_snippet "
+                "FROM analyses WHERE id = %s",
+                (analysis_id,)
+            )
+            row = await cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Analyse nicht gefunden")
+    row = dict(row)
+    if isinstance(row.get("stats"), str):
+        try:
+            row["stats"] = json.loads(row["stats"])
+        except Exception:
+            row["stats"] = {}
+    if isinstance(row.get("created_at"), datetime):
+        row["created_at"] = row["created_at"].isoformat()
+    return row
 
 
 # ── Core endpoints ────────────────────────────────────────────
