@@ -182,6 +182,7 @@ async function loadServerSettings(user) {
     ollamaUrl.value     = settings.ollama_url     || localStorage.getItem('ollama_url') || 'http://localhost:11434';
     analyzePrompt.value = settings.analyze_prompt || DEFAULT_ANALYZE_PROMPT;
     explainPrompt.value = settings.explain_prompt || DEFAULT_EXPLAIN_PROMPT;
+    window._serverDefaultModel = settings.default_model || null;
 
     // Non-admins: settings are read-only
     if (user.role !== 'admin') {
@@ -204,6 +205,11 @@ async function loadServerSettings(user) {
     opt.textContent = savedModel;
     opt.selected = true;
     modelSelect.appendChild(opt);
+  }
+
+  // Automatically load models if URL is available
+  if (ollamaUrl.value) {
+    await loadModels();
   }
 }
 
@@ -470,7 +476,7 @@ async function loadModels() {
     const data = await response.json();
 
     const models = data.models || [];
-    const savedModel = localStorage.getItem('ollama_model');
+    const savedModel = localStorage.getItem('ollama_model') || window._serverDefaultModel;
 
     modelSelect.innerHTML = '<option value="">-- Modell wählen --</option>';
     models.forEach(m => {
