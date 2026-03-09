@@ -694,15 +694,22 @@ async def save_analysis(body: SaveAnalysisRequest, user: dict = Depends(get_curr
 
 
 @app.get("/api/analyses")
-async def list_analyses(limit: int = 100, _: dict = Depends(get_current_user)):
+async def list_analyses(limit: int = 100, user: dict = Depends(get_current_user)):
     pool = await _get_db_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(
-                "SELECT id, type, title, session_id, created_at, created_by, model, customer_context, stats "
-                "FROM analyses ORDER BY created_at DESC LIMIT %s",
-                (limit,)
-            )
+            if user["role"] == "admin":
+                await cur.execute(
+                    "SELECT id, type, title, session_id, created_at, created_by, model, customer_context, stats "
+                    "FROM analyses ORDER BY created_at DESC LIMIT %s",
+                    (limit,)
+                )
+            else:
+                await cur.execute(
+                    "SELECT id, type, title, session_id, created_at, created_by, model, customer_context, stats "
+                    "FROM analyses WHERE created_by = %s ORDER BY created_at DESC LIMIT %s",
+                    (user["username"], limit)
+                )
             rows = await cur.fetchall()
 
     sessions: dict = {}
