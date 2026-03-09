@@ -26,7 +26,7 @@ _SORT_TYPE_RE = re.compile(r'\[\s*(\d)')
 _OCPP_PATTERN = re.compile(r"(\[\s*(?:2|3|4)\s*,\s*\"[^\"]*\".*\])")
 _TS_PATTERN   = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[.,]\d+)?Z?)\s*")
 _DIR_PATTERN  = re.compile(r"\b(SEND|RECV|->|<-)\b", re.IGNORECASE)
-_USERNAME_RE  = re.compile(r'^[a-zA-Z0-9_-]{3,32}$')
+_USERNAME_RE  = re.compile(r'^[a-zA-Z0-9._@+-]{3,64}$')
 
 # OCPP 1.6 spec: actions initiated by the Charging Station → direction SEND
 _CS_INITIATED_ACTIONS = frozenset({
@@ -494,7 +494,7 @@ async def list_users(_: dict = Depends(require_admin)):
 @app.post("/api/users", status_code=201)
 async def create_user(body: CreateUserRequest, current: dict = Depends(require_admin)):
     if not _USERNAME_RE.match(body.username):
-        raise HTTPException(status_code=400, detail="Ungültiger Benutzername (3–32 Zeichen: a–z, 0–9, - oder _)")
+        raise HTTPException(status_code=400, detail="Ungültiger Benutzername (3–64 Zeichen: Buchstaben, Zahlen, @ . _ - +)")
     if len(body.password) < 8:
         raise HTTPException(status_code=400, detail="Passwort muss mindestens 8 Zeichen lang sein")
     if body.role not in ("admin", "user"):
