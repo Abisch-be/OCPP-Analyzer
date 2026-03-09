@@ -162,9 +162,11 @@ async function initApp(user) {
   // Show/hide admin-only elements
   if (user.role === 'admin') {
     document.getElementById('adminSection').classList.remove('hidden');
+    document.getElementById('feedbackSection').classList.remove('hidden');
     document.getElementById('promptsFooter').classList.remove('hidden');
     document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
     loadAdminPanel();
+    loadFeedback();
   }
 
   // Header: user label + logout button
@@ -425,6 +427,13 @@ function setupEventListeners() {
         status.textContent = err.message;
       }
     });
+  }
+
+  setupFeedbackModal();
+
+  const refreshFeedbackBtn = document.getElementById('refreshFeedbackBtn');
+  if (refreshFeedbackBtn) {
+    refreshFeedbackBtn.addEventListener('click', loadFeedback);
   }
 
   fileInput.addEventListener('change', (e) => {
@@ -1899,3 +1908,137 @@ const EXAMPLE_3 = `2024-06-20T14:00:00.000Z SEND [2,"t-001","BootNotification",{
 2024-06-20T14:25:45.360Z RECV [3,"t-018",{}]`;
 
 const EXAMPLE_LOGS = [EXAMPLE_1, EXAMPLE_2, EXAMPLE_3];
+
+// ============================================================
+// Feedback Modal
+// ============================================================
+let feedbackRating   = 0;
+let feedbackCategory = '';
+
+function openFeedbackModal() {
+  feedbackRating   = 0;
+  feedbackCategory = '';
+  document.getElementById('feedbackMessage').value = '';
+  document.getElementById('feedbackCharCount').textContent = '0';
+  document.getElementById('feedbackError').classList.add('hidden');
+  document.querySelectorAll('.star-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('feedbackModal').classList.remove('hidden');
+}
+
+function closeFeedbackModal() {
+  document.getElementById('feedbackModal').classList.add('hidden');
+}
+
+function setupFeedbackModal() {
+  document.getElementById('feedbackToggle').addEventListener('click', openFeedbackModal);
+  document.getElementById('feedbackCloseBtn').addEventListener('click', closeFeedbackModal);
+  document.getElementById('feedbackCancelBtn').addEventListener('click', closeFeedbackModal);
+
+  document.getElementById('feedbackModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeFeedbackModal();
+  });
+
+  document.querySelectorAll('.star-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      feedbackRating = parseInt(btn.dataset.value);
+      document.querySelectorAll('.star-btn').forEach((b, i) => {
+        b.classList.toggle('active', i < feedbackRating);
+      });
+    });
+  });
+
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      feedbackCategory = btn.dataset.value;
+      document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  document.getElementById('feedbackMessage').addEventListener('input', (e) => {
+    document.getElementById('feedbackCharCount').textContent = e.target.value.length;
+  });
+
+  document.getElementById('feedbackSubmitBtn').addEventListener('click', submitFeedback);
+}
+
+async function submitFeedback() {
+  const message = document.getElementById('feedbackMessage').value.trim();
+  const errorEl = document.getElementById('feedbackError');
+  errorEl.classList.add('hidden');
+
+  if (!feedbackRating) {
+    errorEl.textContent = 'Bitte eine Bewertung auswählen.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  if (!feedbackCategory) {
+    errorEl.textContent = 'Bitte eine Kategorie auswählen.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  if (!message) {
+    errorEl.textContent = 'Bitte eine Nachricht eingeben.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  const submitBtn = document.getElementById('feedbackSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Wird gesendet…';
+
+  try {
+    const res = await apiFetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: feedbackRating, category: feedbackCategory, message }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Fehler beim Senden');
+    }
+    closeFeedbackModal();
+    showToast('Feedback erfolgreich gesendet – Danke!', 'success');
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Absenden';
+  }
+}
+
+// ============================================================
+// Admin Feedback List
+// ============================================================
+async function loadFeedback() {
+  const listEl = document.getElementById('feedbackList');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="user-table-empty">Lade Feedback…</div>';
+  try {
+    const res = await apiFetch('/api/feedback');
+    const data = await res.json();
+    const items = data.feedback || [];
+    if (!items.length) {
+      listEl.innerHTML = '<div class="user-table-empty">Noch kein Feedback vorhanden.</div>';
+      return;
+    }
+    listEl.innerHTML = items.map(f => {
+      const stars = '★'.repeat(f.rating) + '☆'.repeat(5 - f.rating);
+      const date  = new Date(f.created_at).toLocaleString('de');
+      return `
+        <div class="feedback-admin-item">
+          <div class="feedback-admin-meta">
+            <span class="feedback-admin-stars rating-${f.rating}">${stars}</span>
+            <span class="feedback-admin-category">${escapeHtml(f.category)}</span>
+            <span class="feedback-admin-user">${escapeHtml(f.created_by)}</span>
+            <span class="feedback-admin-date">${date}</span>
+          </div>
+          <p class="feedback-admin-message">${escapeHtml(f.message)}</p>
+        </div>`;
+    }).join('');
+  } catch {
+    listEl.innerHTML = '<div class="user-table-empty">Fehler beim Laden des Feedbacks.</div>';
+  }
+}

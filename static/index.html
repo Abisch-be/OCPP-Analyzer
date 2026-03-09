@@ -38,6 +38,12 @@
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
         </button>
+        <button class="ghost-btn feedback-nav-btn" id="feedbackToggle" aria-label="Feedback geben">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          Feedback
+        </button>
         <button class="ghost-btn icon-btn" id="settingsToggle" aria-label="Einstellungen">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
@@ -119,6 +125,20 @@
             <button id="createUserBtn" class="settings-load">Anlegen</button>
             <span id="createUserStatus" class="settings-status"></span>
           </div>
+        <!-- ── Feedback-Bereich (nur Admin) ── -->
+        <div id="feedbackSection" class="admin-section hidden">
+          <div class="admin-section-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            Nutzer-Feedback
+            <button class="settings-reset-btn" id="refreshFeedbackBtn" style="margin-left:auto">Aktualisieren</button>
+          </div>
+          <div id="feedbackList" class="feedback-admin-list">
+            <div class="user-table-empty">Lade Feedback…</div>
+          </div>
+        </div>
+
         </div>
       </div>
     </div>
@@ -281,6 +301,49 @@
   <div id="ocppTooltip" class="ocpp-tooltip hidden">
     <div class="ocpp-tooltip-title"></div>
     <div class="ocpp-tooltip-body"></div>
+  </div>
+
+  <!-- ── Feedback-Modal ─────────────────────────────────── -->
+  <div id="feedbackModal" class="feedback-modal-backdrop hidden">
+    <div class="feedback-modal">
+      <div class="feedback-modal-header">
+        <span class="feedback-modal-title">Feedback geben</span>
+        <button class="feedback-close-btn" id="feedbackCloseBtn" aria-label="Schließen">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="feedback-modal-body">
+        <div class="feedback-field">
+          <label class="feedback-label">Bewertung</label>
+          <div class="star-rating" id="starRating">
+            <button class="star-btn" data-value="1" aria-label="1 Stern">★</button>
+            <button class="star-btn" data-value="2" aria-label="2 Sterne">★</button>
+            <button class="star-btn" data-value="3" aria-label="3 Sterne">★</button>
+            <button class="star-btn" data-value="4" aria-label="4 Sterne">★</button>
+            <button class="star-btn" data-value="5" aria-label="5 Sterne">★</button>
+          </div>
+        </div>
+        <div class="feedback-field">
+          <label class="feedback-label">Kategorie</label>
+          <div class="feedback-categories" id="feedbackCategories">
+            <button class="category-btn" data-value="Lob">Lob</button>
+            <button class="category-btn" data-value="Bug">Bug</button>
+            <button class="category-btn" data-value="Feature-Wunsch">Feature-Wunsch</button>
+            <button class="category-btn" data-value="Sonstiges">Sonstiges</button>
+          </div>
+        </div>
+        <div class="feedback-field">
+          <label class="feedback-label" for="feedbackMessage">Nachricht</label>
+          <textarea id="feedbackMessage" class="feedback-textarea" rows="4" maxlength="2000" placeholder="Was möchtest du uns mitteilen?"></textarea>
+          <span class="feedback-char-count"><span id="feedbackCharCount">0</span> / 2000</span>
+        </div>
+        <div id="feedbackError" class="feedback-error hidden"></div>
+      </div>
+      <div class="feedback-modal-footer">
+        <button class="action-secondary" id="feedbackCancelBtn">Abbrechen</button>
+        <button class="action-primary" id="feedbackSubmitBtn">Absenden</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Login-Overlay ──────────────────────────────────── -->

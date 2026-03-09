@@ -147,6 +147,16 @@ async def _initialize_db():
                      datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")),
                 )
                 print(f"[startup] Admin user '{username}' created from env vars.")
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS feedback (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    created_at  DATETIME(6)   NOT NULL,
+                    created_by  VARCHAR(64)   NOT NULL DEFAULT '',
+                    rating      TINYINT       NOT NULL,
+                    category    VARCHAR(64)   NOT NULL DEFAULT '',
+                    message     TEXT          NOT NULL DEFAULT ''
+                ) CHARACTER SET utf8mb4
+            """)
             try:
                 await cur.execute("""
                     CREATE TABLE IF NOT EXISTS analyses (
@@ -288,6 +298,12 @@ class UpdateSettingsRequest(BaseModel):
     default_model: Optional[str] = None
     analyze_prompt: Optional[str] = None
     explain_prompt: Optional[str] = None
+
+
+class FeedbackRequest(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    category: str = Field(..., max_length=64)
+    message: str = Field(..., min_length=1, max_length=2000)
 
 
 class SaveAnalysisRequest(BaseModel):
@@ -745,6 +761,45 @@ async def get_analysis(analysis_id: int, _: dict = Depends(get_current_user)):
     if isinstance(row.get("created_at"), datetime):
         row["created_at"] = row["created_at"].isoformat()
     return row
+
+
+# ── Feedback endpoints ────────────────────────────────────────
+@app.post("/api/feedback", status_code=201)
+async def submit_feedback(body: FeedbackRequest, user: dict = Depends(get_current_user)):
+    if body.category not in ("Bug", "Feature-Wunsch", "Lob", "Sonstiges"):
+        raise HTTPException(status_code=400, detail="Ungültige Kategorie")
+    pool = await _get_db_pool()
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO feedback (created_at, created_by, rating, category, message) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (created_at, user["username"], body.rating, body.category, body.message),
+            )
+            feedback_id = cur.lastrowid
+        await conn.commit()
+    return {"id": feedback_id, "created_at": created_at}
+
+
+@app.get("/api/feedback")
+async def list_feedback(limit: int = 200, _: dict = Depends(require_admin)):
+    pool = await _get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(
+                "SELECT id, created_at, created_by, rating, category, message "
+                "FROM feedback ORDER BY created_at DESC LIMIT %s",
+                (limit,)
+            )
+            rows = await cur.fetchall()
+    result = []
+    for r in rows:
+        row = dict(r)
+        if isinstance(row.get("created_at"), datetime):
+            row["created_at"] = row["created_at"].isoformat()
+        result.append(row)
+    return {"feedback": result}
 
 
 # ── Core endpoints ────────────────────────────────────────────
