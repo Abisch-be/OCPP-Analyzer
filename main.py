@@ -16,7 +16,6 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import httpx
 from duckduckgo_search import DDGS
-from passlib.context import CryptContext
 
 # Module-level compiled regex constants (avoid recompilation per request)
 _DATE_PATTERN = re.compile(r"\d{2}\.\d{2}\.\d{4}\s*\|\s*\d{2}:\d{2}:\d{2}")
@@ -57,7 +56,26 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 SESSION_TTL_HOURS = 8
 # Stateless signed tokens – work across serverless instances, no shared state needed.
 _SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32)).encode()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+_PBKDF2_ITERATIONS = 260_000
+
+
+def _hash_password(password: str) -> str:
+    """PBKDF2-SHA256 with random salt. Pure stdlib, no native extensions."""
+    salt = os.urandom(32)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ITERATIONS)
+    return salt.hex() + ":" + key.hex()
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        salt_hex, key_hex = stored.split(":", 1)
+        salt = bytes.fromhex(salt_hex)
+        expected = bytes.fromhex(key_hex)
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ITERATIONS)
+        return hmac.compare_digest(actual, expected)
+    except Exception:
+        return False
 
 MSG_TYPES = {2: "CALL", 3: "CALLRESULT", 4: "CALLERROR"}
 
@@ -76,7 +94,7 @@ def _initialize_data():
         password = os.getenv("OCPP_PASSWORD", "changeme")
         users_data = {"users": [{
             "username": username,
-            "password_hash": pwd_context.hash(password),
+            "password_hash": _hash_password(password),
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": "system",
@@ -437,7 +455,7 @@ def parse_ocpp_logs(log_content: str) -> dict:
 async def login(body: LoginRequest, response: Response):
     users = _load_users()
     user = next((u for u in users if u["username"] == body.username), None)
-    if not user or not pwd_context.verify(body.password, user["password_hash"]):
+    if not user or not _verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Ungültige Anmeldedaten")
     token = _make_token(user["username"], user["role"])
     response.set_cookie(
@@ -486,7 +504,7 @@ async def create_user(body: CreateUserRequest, current: dict = Depends(require_a
         raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
     new_user = {
         "username": body.username,
-        "password_hash": pwd_context.hash(body.password),
+        "password_hash": _hash_password(body.password),
         "role": body.role,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": current["username"],
