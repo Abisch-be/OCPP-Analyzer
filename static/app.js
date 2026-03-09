@@ -325,24 +325,39 @@ function setupEventListeners() {
   exampleBtn.addEventListener('click', loadExample);
   clearBtn.addEventListener('click', clearLog);
 
+  const backdrop     = document.getElementById('modalBackdrop');
+  const historyToggle = document.getElementById('historyToggle');
+  const historyPanel  = document.getElementById('historyPanel');
+
+  function closePanels() {
+    settingsPanel.classList.add('hidden');
+    if (historyPanel) historyPanel.classList.add('hidden');
+    backdrop.classList.remove('visible');
+  }
+
   settingsToggle.addEventListener('click', () => {
-    settingsPanel.classList.toggle('hidden');
-    if (!settingsPanel.classList.contains('hidden')) {
-      historyPanel.classList.add('hidden');
+    const opening = settingsPanel.classList.contains('hidden');
+    closePanels();
+    if (opening) {
+      settingsPanel.classList.remove('hidden');
+      backdrop.classList.add('visible');
     }
   });
 
-  const historyToggle = document.getElementById('historyToggle');
-  const historyPanel  = document.getElementById('historyPanel');
   if (historyToggle) {
     historyToggle.addEventListener('click', () => {
-      historyPanel.classList.toggle('hidden');
-      if (!historyPanel.classList.contains('hidden')) {
-        settingsPanel.classList.add('hidden');
+      const opening = historyPanel.classList.contains('hidden');
+      closePanels();
+      if (opening) {
+        historyPanel.classList.remove('hidden');
+        backdrop.classList.add('visible');
         loadHistory();
       }
     });
   }
+
+  backdrop.addEventListener('click', closePanels);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanels(); });
 
   loadModelsBtn.addEventListener('click', loadModels);
 

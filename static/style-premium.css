@@ -222,10 +222,26 @@ html, body {
 }
 
 /* ── Settings ───────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 150;
+  display: none;
+}
+.modal-backdrop.visible { display: block; }
+
 .settings-bar {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  z-index: 200;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  max-height: calc(100vh - var(--header-h));
+  overflow-y: auto;
 }
 .settings-bar.hidden { display: none; }
 
@@ -1592,7 +1608,7 @@ details[open] .issue-chevron { transform: rotate(45deg); margin-top: 0; margin-b
 
 /* ── History Panel ───────────────────────────────────────── */
 #historyPanel .settings-inner {
-  max-height: 60vh;
+  max-height: calc(100vh - var(--header-h) - 16px);
   overflow-y: auto;
 }
 
