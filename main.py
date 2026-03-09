@@ -2,6 +2,9 @@ import os
 import re
 import json
 import secrets
+import hmac
+import hashlib
+import base64
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -45,12 +48,15 @@ _BACKEND_INITIATED_ACTIONS = frozenset({
 })
 
 # ── Data layer ────────────────────────────────────────────────
-DATA_DIR     = Path(os.getenv("DATA_DIR", "/app/data"))
-USERS_FILE   = DATA_DIR / "users.json"
+# /tmp is writable on both Vercel serverless and Docker containers.
+# For Docker with persistent storage mount ./data:/tmp/ocpp-data.
+DATA_DIR      = Path(os.getenv("DATA_DIR", "/tmp/ocpp-data"))
+USERS_FILE    = DATA_DIR / "users.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 
 SESSION_TTL_HOURS = 8
-_sessions: dict[str, dict] = {}
+# Stateless signed tokens – work across serverless instances, no shared state needed.
+_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32)).encode()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 MSG_TYPES = {2: "CALL", 3: "CALLRESULT", 4: "CALLERROR"}
@@ -100,18 +106,44 @@ def _save_settings(settings: dict):
     SETTINGS_FILE.write_text(json.dumps(settings, indent=2, ensure_ascii=False))
 
 
+# ── Stateless signed session tokens ──────────────────────────
+def _make_token(username: str, role: str) -> str:
+    """Create a signed session token: base64(payload).signature"""
+    exp = int((datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS)).timestamp())
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"u": username, "r": role, "exp": exp}).encode()
+    ).decode()
+    sig = hmac.new(_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+
+def _verify_token(token: str) -> dict | None:
+    """Verify token signature and expiry. Returns payload dict or None."""
+    try:
+        payload_b64, sig = token.rsplit(".", 1)
+    except ValueError:
+        return None
+    expected = hmac.new(_SECRET, payload_b64.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        return None
+    try:
+        data = json.loads(base64.urlsafe_b64decode(payload_b64 + "=="))
+    except Exception:
+        return None
+    if data.get("exp", 0) < datetime.now(timezone.utc).timestamp():
+        return None
+    return data
+
+
 # ── Auth dependencies ─────────────────────────────────────────
 def get_current_user(request: Request) -> dict:
     token = request.cookies.get("session")
-    if not token or token not in _sessions:
+    if not token:
         raise HTTPException(status_code=401, detail="Nicht angemeldet")
-    session = _sessions[token]
-    if session["expires_at"] < datetime.now(timezone.utc):
-        del _sessions[token]
+    data = _verify_token(token)
+    if not data:
         raise HTTPException(status_code=401, detail="Sitzung abgelaufen")
-    # Slide TTL
-    session["expires_at"] = datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS)
-    return {"username": session["username"], "role": session["role"]}
+    return {"username": data["u"], "role": data["r"]}
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -407,12 +439,7 @@ async def login(body: LoginRequest, response: Response):
     user = next((u for u in users if u["username"] == body.username), None)
     if not user or not pwd_context.verify(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Ungültige Anmeldedaten")
-    token = secrets.token_hex(32)
-    _sessions[token] = {
-        "username": user["username"],
-        "role": user["role"],
-        "expires_at": datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS),
-    }
+    token = _make_token(user["username"], user["role"])
     response.set_cookie(
         "session", token,
         httponly=True, samesite="lax",
@@ -478,10 +505,8 @@ async def delete_user(username: str, current: dict = Depends(require_admin)):
     if len(new_users) == len(users):
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
     _save_users(new_users)
-    # Invalidate all sessions of the deleted user
-    to_delete = [t for t, s in list(_sessions.items()) if s["username"] == username]
-    for t in to_delete:
-        del _sessions[t]
+    # Note: stateless tokens cannot be actively revoked.
+    # Deleted users' tokens expire naturally after SESSION_TTL_HOURS.
 
 
 # ── Settings endpoints ────────────────────────────────────────
