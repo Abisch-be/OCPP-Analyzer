@@ -568,6 +568,80 @@ def parse_ocpp_logs(log_content: str) -> dict:
             "detail": "Die Ladestation sollte beim Start ein BootNotification senden.",
         })
 
+    # ── Session extraction (StartTransaction/StopTransaction pairs) ──────────
+    sessions: list[dict] = []
+    _pending_starts: dict = {}   # uniqueId  → start_data
+    _active_sessions: dict = {}  # transactionId → start_data
+
+    for msg in messages:
+        if msg.get("type") == "CALL" and msg.get("action") == "StartTransaction":
+            payload = msg.get("payload", {})
+            _pending_starts[msg["uniqueId"]] = {
+                "connector_id": payload.get("connectorId"),
+                "id_tag": payload.get("idTag"),
+                "meter_start": payload.get("meterStart", 0),
+                "start_time": payload.get("timestamp") or msg.get("timestamp"),
+                "start_line": msg["line"],
+            }
+        elif msg.get("type") == "CALLRESULT" and msg.get("action") == "StartTransaction":
+            payload = msg.get("payload", {})
+            tx_id = payload.get("transactionId")
+            if tx_id and msg["uniqueId"] in _pending_starts:
+                start_data = _pending_starts.pop(msg["uniqueId"])
+                start_data["transaction_id"] = tx_id
+                _active_sessions[tx_id] = start_data
+        elif msg.get("type") == "CALL" and msg.get("action") == "StopTransaction":
+            payload = msg.get("payload", {})
+            tx_id = payload.get("transactionId")
+            if tx_id in _active_sessions:
+                start_data = _active_sessions.pop(tx_id)
+                meter_start = start_data.get("meter_start", 0)
+                meter_stop  = payload.get("meterStop", 0)
+                energy_wh   = meter_stop - meter_start
+                start_time  = start_data.get("start_time")
+                stop_time   = payload.get("timestamp") or msg.get("timestamp")
+                duration_s: int | None = None
+                if start_time and stop_time:
+                    try:
+                        _t1 = datetime.fromisoformat(start_time.rstrip("Z").replace(",", "."))
+                        _t2 = datetime.fromisoformat(stop_time.rstrip("Z").replace(",", "."))
+                        duration_s = int((_t2 - _t1).total_seconds())
+                    except Exception:
+                        pass
+                reason = payload.get("reason", "")
+                _interrupted = {"EmergencyStop", "PowerLoss", "EVDisconnected", "Reboot"}
+                _error_during = any(
+                    start_data["start_line"] <= e["line"] <= msg["line"]
+                    for e in errors
+                )
+                if reason in _interrupted:
+                    session_status = "interrupted"
+                elif _error_during:
+                    session_status = "error"
+                else:
+                    session_status = "completed"
+                sessions.append({
+                    "transaction_id": tx_id,
+                    "connector_id":   start_data.get("connector_id"),
+                    "id_tag":         start_data.get("id_tag"),
+                    "start_time":     start_time,
+                    "stop_time":      stop_time,
+                    "duration_s":     duration_s,
+                    "energy_wh":      energy_wh,
+                    "meter_start":    meter_start,
+                    "meter_stop":     meter_stop,
+                    "reason":         reason,
+                    "status":         session_status,
+                })
+
+    # ── Action frequency stats (CALLs only) ──────────────────────────────────
+    action_stats: dict[str, int] = {}
+    for msg in messages:
+        if msg.get("type") == "CALL":
+            action = msg.get("action")
+            if action:
+                action_stats[action] = action_stats.get(action, 0) + 1
+
     stats = {
         "total": len(messages),
         "calls": sum(1 for m in messages if m["type"] == "CALL"),
@@ -575,8 +649,16 @@ def parse_ocpp_logs(log_content: str) -> dict:
         "callerrors": sum(1 for m in messages if m["type"] == "CALLERROR"),
         "errors": len(errors),
         "warnings": len(warnings),
+        "sessions_count": len(sessions),
     }
-    return {"messages": messages, "errors": errors, "warnings": warnings, "stats": stats}
+    return {
+        "messages":    messages,
+        "errors":      errors,
+        "warnings":    warnings,
+        "stats":       stats,
+        "sessions":    sessions,
+        "action_stats": action_stats,
+    }
 
 
 # ── Auth endpoints ────────────────────────────────────────────

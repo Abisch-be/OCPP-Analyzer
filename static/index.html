@@ -237,6 +237,12 @@
             <span class="tab-badge hidden" id="issuesBadge"></span>
           </button>
           <button class="tab" data-tab="messages">Nachrichten</button>
+          <button class="tab" data-tab="sequence">Ablauf</button>
+          <button class="tab" data-tab="sessions">
+            Sessions
+            <span class="tab-badge hidden" id="sessionsBadge"></span>
+          </button>
+          <button class="tab" data-tab="overview">Übersicht</button>
           <button class="tab" data-tab="analysis">KI-Analyse</button>
           <button class="tab" data-tab="explanation">Zusammenfassung</button>
         </div>
@@ -250,6 +256,39 @@
             </svg>
             <p class="empty-title">Keine Issues erkannt</p>
             <p class="empty-sub">Führe Parse aus um Fehler und Warnungen zu erkennen</p>
+          </div>
+        </div>
+
+        <div class="tab-content hidden output-pane" id="tab-sequence">
+          <div class="empty-state">
+            <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <line x1="5" y1="3" x2="5" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/>
+              <polyline points="5 8 12 8 19 8"/><polyline points="5 16 12 16 19 16"/>
+              <line x1="12" y1="8" x2="12" y2="16"/>
+            </svg>
+            <p class="empty-title">Kein Ablauf-Diagramm</p>
+            <p class="empty-sub">Parse den Log um den OCPP-Kommunikationsfluss zu sehen</p>
+          </div>
+        </div>
+
+        <div class="tab-content hidden output-pane" id="tab-sessions">
+          <div class="empty-state">
+            <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><path d="M8 7V5a2 2 0 0 1 4 0"/>
+            </svg>
+            <p class="empty-title">Keine Ladesessions</p>
+            <p class="empty-sub">Parse den Log um Lade-Sessions zu erkennen</p>
+          </div>
+        </div>
+
+        <div class="tab-content hidden output-pane" id="tab-overview">
+          <div class="empty-state">
+            <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <p class="empty-title">Keine Übersicht</p>
+            <p class="empty-sub">Parse den Log um die statistische Übersicht zu sehen</p>
           </div>
         </div>
 

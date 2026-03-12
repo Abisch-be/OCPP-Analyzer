@@ -584,6 +584,9 @@ async function parseLogs() {
     updateStats(parsedData.stats);
     displayMessages(parsedData.messages);
     displayIssues(parsedData.errors, parsedData.warnings);
+    renderSequenceDiagram(parsedData.messages, parsedData.errors, parsedData.warnings);
+    renderSessions(parsedData.sessions || []);
+    renderDashboard(parsedData.stats, parsedData.action_stats || {});
 
     const total = parsedData.stats.total;
     const issues = parsedData.stats.errors + parsedData.stats.warnings;
@@ -1406,6 +1409,347 @@ function renderExplanation(container, text, streaming) {
 }
 
 // ============================================================
+// Sequence Diagram (Phase 1)
+// ============================================================
+function renderSequenceDiagram(messages, errors, warnings) {
+  const container = document.getElementById('tab-sequence');
+  if (!container) return;
+
+  if (!messages || messages.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p class="empty-title">Keine Nachrichten</p><p class="empty-sub">Keine OCPP-Nachrichten gefunden</p></div>';
+    return;
+  }
+
+  const errorLines   = new Set((errors   || []).map(e => e.line));
+  const warningLines = new Set((warnings || []).map(w => w.line));
+
+  let rows = '';
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    const isSend = msg.direction === 'SEND' ||
+      (msg.direction == null && CS_INITIATED.has(msg.action));
+
+    const isError = errorLines.has(msg.line) || msg.type === 'CALLERROR';
+    const isWarn  = !isError && warningLines.has(msg.line);
+    const cls = isError ? 'seq-error' : isWarn ? 'seq-warn' : 'seq-ok';
+
+    let label;
+    if      (msg.type === 'CALL')       label = msg.action || 'CALL';
+    else if (msg.type === 'CALLRESULT') label = `↩ ${msg.action || 'Response'}`;
+    else                                label = `✗ ${msg.action || msg.type}`;
+
+    const ts = formatTime(msg.timestamp);
+
+    rows += `<div class="seq-row ${isSend ? 'seq-send' : 'seq-recv'} ${cls}" data-idx="${i}">
+      <span class="seq-ts">${escapeHtml(ts)}</span>
+      <div class="seq-arrow-wrap">
+        <span class="seq-action">${escapeHtml(label)}</span>
+        <div class="seq-line"></div>
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = `
+    <div class="seq-diagram">
+      <div class="seq-actors-bar">
+        <div class="seq-actors-inner">
+          <span class="seq-ts-head"></span>
+          <div class="seq-actor-cs"><div class="seq-actor-box">⚡ Ladestation</div></div>
+          <div class="seq-actor-be"><div class="seq-actor-box">🖥 Backend</div></div>
+        </div>
+      </div>
+      <div class="seq-body">${rows}</div>
+      <div id="seqDetail" class="seq-detail hidden"></div>
+    </div>`;
+
+  container.querySelectorAll('.seq-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const msg = messages[parseInt(el.dataset.idx, 10)];
+      showSeqDetail(msg, container.querySelector('#seqDetail'), el);
+    });
+  });
+}
+
+function showSeqDetail(msg, detailEl, rowEl) {
+  if (!detailEl.classList.contains('hidden') && detailEl._seqLine === msg.line) {
+    detailEl.classList.add('hidden');
+    return;
+  }
+  detailEl._seqLine = msg.line;
+
+  let payloadStr = '';
+  if (msg.type === 'CALLERROR') {
+    payloadStr = JSON.stringify({
+      errorCode:        msg.errorCode,
+      errorDescription: msg.errorDescription,
+      errorDetails:     msg.errorDetails,
+    }, null, 2);
+  } else if (msg.payload && Object.keys(msg.payload).length > 0) {
+    payloadStr = JSON.stringify(msg.payload, null, 2);
+  }
+
+  const dirLabel = msg.direction === 'SEND'
+    ? 'Ladestation → Backend'
+    : msg.direction === 'RECV'
+      ? 'Backend → Ladestation'
+      : '';
+
+  detailEl.innerHTML = `
+    <div class="seq-detail-header">
+      <span class="seq-detail-action">${escapeHtml(msg.action || msg.type)}</span>
+      <span class="seq-detail-type">${escapeHtml(msg.type)}</span>
+      ${dirLabel ? `<span class="seq-detail-dir">${escapeHtml(dirLabel)}</span>` : ''}
+      <span class="seq-detail-ts">${escapeHtml(formatTimestamp(msg.timestamp))}</span>
+      <span class="seq-detail-line">Zeile ${msg.line}</span>
+      <button class="seq-detail-close" onclick="this.closest('.seq-detail').classList.add('hidden')">✕</button>
+    </div>
+    ${payloadStr
+      ? `<pre class="seq-detail-payload">${escapeHtml(payloadStr)}</pre>`
+      : '<div class="seq-detail-empty">Kein Payload</div>'}`;
+
+  detailEl.classList.remove('hidden');
+
+  // Scroll detail into view
+  setTimeout(() => detailEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+}
+
+// ============================================================
+// Sessions Overview (Phase 2)
+// ============================================================
+function renderSessions(sessions) {
+  const container = document.getElementById('tab-sessions');
+  if (!container) return;
+
+  const badge = document.getElementById('sessionsBadge');
+  if (badge) {
+    if (sessions && sessions.length > 0) {
+      badge.textContent = sessions.length;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
+  if (!sessions || sessions.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <p class="empty-title">Keine Ladesessions</p>
+      <p class="empty-sub">Keine vollständigen StartTransaction/StopTransaction-Paare gefunden</p>
+    </div>`;
+    return;
+  }
+
+  let html = '<div class="sessions-list">';
+  for (const s of sessions) {
+    const statusClass = s.status === 'completed' ? 'session-ok'
+                      : s.status === 'interrupted' ? 'session-warn'
+                      : 'session-error';
+    const statusLabel = s.status === 'completed'  ? 'Erfolgreich'
+                      : s.status === 'interrupted' ? 'Unterbrochen'
+                      : 'Fehler';
+    const statusIcon  = s.status === 'completed'  ? '✅'
+                      : s.status === 'interrupted' ? '⚠️'
+                      : '🔴';
+
+    const durationStr = formatDuration(s.duration_s);
+    const energyKWh   = s.energy_wh != null ? (s.energy_wh / 1000).toFixed(2) : null;
+    const energyStr   = energyKWh !== null && s.energy_wh >= 0 ? `${energyKWh} kWh` : '–';
+
+    html += `<div class="session-card ${statusClass}">
+      <div class="session-card-header">
+        <span class="session-badge ${statusClass}">${statusIcon} ${escapeHtml(statusLabel)}</span>
+        <span class="session-txid">TX #${escapeHtml(String(s.transaction_id))}</span>
+        <span class="session-connector">Connector ${escapeHtml(String(s.connector_id ?? '–'))}</span>
+        <span class="session-idtag">${escapeHtml(s.id_tag || '–')}</span>
+      </div>
+      <div class="session-card-stats">
+        <div class="session-stat">
+          <span class="session-stat-label">Start</span>
+          <span class="session-stat-value">${escapeHtml(formatTimestamp(s.start_time))}</span>
+        </div>
+        <div class="session-stat">
+          <span class="session-stat-label">Ende</span>
+          <span class="session-stat-value">${escapeHtml(formatTimestamp(s.stop_time))}</span>
+        </div>
+        <div class="session-stat">
+          <span class="session-stat-label">Dauer</span>
+          <span class="session-stat-value session-stat-hl">${escapeHtml(durationStr)}</span>
+        </div>
+        <div class="session-stat">
+          <span class="session-stat-label">Energie</span>
+          <span class="session-stat-value session-stat-hl">${escapeHtml(energyStr)}</span>
+        </div>
+        ${s.reason ? `<div class="session-stat">
+          <span class="session-stat-label">Stoppgrund</span>
+          <span class="session-stat-value">${escapeHtml(s.reason)}</span>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || seconds < 0) return '–';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// ============================================================
+// Dashboard / Overview (Phase 3)
+// ============================================================
+let overviewDonutInstance = null;
+let overviewBarInstance   = null;
+
+function renderDashboard(stats, actionStats) {
+  const container = document.getElementById('tab-overview');
+  if (!container) return;
+
+  if (!stats || stats.total === 0) {
+    container.innerHTML = '<div class="empty-state"><p class="empty-title">Keine Daten</p></div>';
+    return;
+  }
+
+  const errorRate = stats.total > 0
+    ? ((stats.callerrors / stats.total) * 100).toFixed(1)
+    : '0.0';
+
+  const topActions = Object.entries(actionStats || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  container.innerHTML = `
+    <div class="overview-wrap">
+      <div class="overview-kpis">
+        <div class="overview-kpi">
+          <span class="overview-kpi-val">${stats.total}</span>
+          <span class="overview-kpi-label">Nachrichten</span>
+        </div>
+        <div class="overview-kpi">
+          <span class="overview-kpi-val ${stats.callerrors > 0 ? 'kpi-error' : ''}">${stats.callerrors}</span>
+          <span class="overview-kpi-label">Fehler</span>
+        </div>
+        <div class="overview-kpi">
+          <span class="overview-kpi-val ${stats.warnings > 0 ? 'kpi-warn' : ''}">${stats.warnings}</span>
+          <span class="overview-kpi-label">Warnungen</span>
+        </div>
+        <div class="overview-kpi">
+          <span class="overview-kpi-val ${stats.callerrors > 0 ? 'kpi-error' : ''}">${errorRate}%</span>
+          <span class="overview-kpi-label">Fehlerrate</span>
+        </div>
+        <div class="overview-kpi">
+          <span class="overview-kpi-val">${stats.sessions_count ?? 0}</span>
+          <span class="overview-kpi-label">Sessions</span>
+        </div>
+      </div>
+
+      <div class="overview-charts">
+        <div class="overview-chart-card">
+          <div class="overview-chart-title">Nachrichtentypen</div>
+          <div class="overview-donut-wrap">
+            <canvas id="overviewDonut"></canvas>
+          </div>
+        </div>
+        <div class="overview-chart-card overview-chart-wide">
+          <div class="overview-chart-title">OCPP-Actions (Häufigkeit)</div>
+          <div class="overview-bar-wrap">
+            <canvas id="overviewBar"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  if (overviewDonutInstance) { overviewDonutInstance.destroy(); overviewDonutInstance = null; }
+  if (overviewBarInstance)   { overviewBarInstance.destroy();   overviewBarInstance   = null; }
+
+  const donutCanvas = document.getElementById('overviewDonut');
+  if (donutCanvas && typeof Chart !== 'undefined') {
+    overviewDonutInstance = new Chart(donutCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['CALL', 'CALLRESULT', 'CALLERROR'],
+        datasets: [{
+          data: [stats.calls, stats.callresults, stats.callerrors],
+          backgroundColor: [
+            'rgba(26,86,219,0.82)',
+            'rgba(30,126,70,0.82)',
+            'rgba(217,48,37,0.82)',
+          ],
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11, weight: '500' }, color: '#5C5852', padding: 14, usePointStyle: true, pointStyle: 'circle' },
+          },
+          tooltip: {
+            backgroundColor: 'rgba(25,24,26,0.92)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#9A968F',
+            cornerRadius: 8,
+          },
+        },
+        cutout: '62%',
+        animation: { duration: 300 },
+      },
+    });
+  }
+
+  const barCanvas = document.getElementById('overviewBar');
+  if (barCanvas && typeof Chart !== 'undefined' && topActions.length > 0) {
+    overviewBarInstance = new Chart(barCanvas, {
+      type: 'bar',
+      data: {
+        labels: topActions.map(([a]) => a),
+        datasets: [{
+          label: 'Anzahl CALLs',
+          data:  topActions.map(([, c]) => c),
+          backgroundColor: 'rgba(26,86,219,0.75)',
+          borderRadius: 4,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(25,24,26,0.92)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#9A968F',
+            cornerRadius: 8,
+          },
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: { color: '#9A968F', font: { size: 10 }, precision: 0 },
+            grid: { color: 'rgba(163,155,147,0.12)' },
+            border: { display: false },
+          },
+          y: {
+            ticks: { color: '#5C5852', font: { size: 11 } },
+            grid: { display: false },
+            border: { display: false },
+          },
+        },
+        animation: { duration: 300 },
+      },
+    });
+  }
+}
+
+// ============================================================
 // Empty-state HTML constants
 // ============================================================
 const OCPP_DESCRIPTIONS = {
@@ -1444,10 +1788,13 @@ const OCPP_DESCRIPTIONS = {
 };
 
 const EMPTY_STATES = {
-  messages: '<div class="empty-state"><div class="empty-icon">📭</div><div>Log parsen um Nachrichten anzuzeigen</div></div>',
-  analysis: '<div class="empty-state"><div class="empty-icon">🔬</div><div>„🤖 KI-Analyse" klicken um eine detaillierte Analyse zu erhalten</div></div>',
-  issues:   '<div class="empty-state"><div class="empty-icon">✅</div><div>Keine Issues erkannt</div></div>',
-  explanation: '<div class="empty-state"><div class="empty-icon">💡</div><div>„💡 Zusammenfassung" klicken um eine verständliche Zusammenfassung zu erhalten</div></div>',
+  messages:    '<div class="empty-state"><div class="empty-icon">📭</div><div>Log parsen um Nachrichten anzuzeigen</div></div>',
+  analysis:    '<div class="empty-state"><div class="empty-icon">🔬</div><div>„KI-Analyse" klicken um eine detaillierte Analyse zu erhalten</div></div>',
+  issues:      '<div class="empty-state"><div class="empty-icon">✅</div><div>Keine Issues erkannt</div></div>',
+  explanation: '<div class="empty-state"><div class="empty-icon">💡</div><div>„Zusammenfassung" klicken um eine verständliche Zusammenfassung zu erhalten</div></div>',
+  sequence:    '<div class="empty-state"><div class="empty-icon">📊</div><div>Log parsen um den OCPP-Ablauf zu sehen</div></div>',
+  sessions:    '<div class="empty-state"><div class="empty-icon">⚡</div><div>Log parsen um Ladesessions zu erkennen</div></div>',
+  overview:    '<div class="empty-state"><div class="empty-icon">📈</div><div>Log parsen um die Übersicht zu sehen</div></div>',
 };
 
 // ============================================================
@@ -1479,13 +1826,23 @@ function markResultsDirty() {
 
   issuesBadge.classList.add('hidden');
 
-  document.getElementById('tab-messages').innerHTML = EMPTY_STATES.messages;
-  document.getElementById('tab-analysis').innerHTML = EMPTY_STATES.analysis;
-  document.getElementById('tab-issues').innerHTML   = EMPTY_STATES.issues;
-  document.getElementById('tab-explanation').innerHTML    = EMPTY_STATES.explanation;
+  document.getElementById('tab-messages').innerHTML   = EMPTY_STATES.messages;
+  document.getElementById('tab-analysis').innerHTML   = EMPTY_STATES.analysis;
+  document.getElementById('tab-issues').innerHTML     = EMPTY_STATES.issues;
+  document.getElementById('tab-explanation').innerHTML = EMPTY_STATES.explanation;
+  const seqEl = document.getElementById('tab-sequence');
+  if (seqEl) seqEl.innerHTML = EMPTY_STATES.sequence;
+  const sessEl = document.getElementById('tab-sessions');
+  if (sessEl) sessEl.innerHTML = EMPTY_STATES.sessions;
+  const ovEl = document.getElementById('tab-overview');
+  if (ovEl) ovEl.innerHTML = EMPTY_STATES.overview;
+  const sessionsBadge = document.getElementById('sessionsBadge');
+  if (sessionsBadge) sessionsBadge.classList.add('hidden');
   explanationText = '';
 
   if (timelineChartInstance) { timelineChartInstance.destroy(); timelineChartInstance = null; }
+  if (overviewDonutInstance) { overviewDonutInstance.destroy(); overviewDonutInstance = null; }
+  if (overviewBarInstance)   { overviewBarInstance.destroy();   overviewBarInstance   = null; }
 
   analyzeBtn.disabled    = false;
   analyzeBtn.textContent = '🤖 KI-Analyse';
@@ -1698,6 +2055,9 @@ async function restoreSession(analyzeId, explainId) {
     displayMessages(parsedData.messages || []);
     displayIssues(parsedData.errors || [], parsedData.warnings || []);
     updateStats(parsedData.stats || { errors: 0, warnings: 0, total: 0, calls: 0, callresults: 0, callerrors: 0 });
+    renderSequenceDiagram(parsedData.messages || [], parsedData.errors || [], parsedData.warnings || []);
+    renderSessions(parsedData.sessions || []);
+    renderDashboard(parsedData.stats || {}, parsedData.action_stats || {});
   }
 
   if (analyzeEntry && analysisTab) {
