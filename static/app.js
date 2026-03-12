@@ -1409,108 +1409,275 @@ function renderExplanation(container, text, streaming) {
 }
 
 // ============================================================
-// Sequence Diagram (Phase 1)
+// Sequence Diagram – Premium
 // ============================================================
+
+/** Detect logical phase transitions in the message stream. */
+function detectPhases(messages) {
+  const PHASES = [
+    [0, new Set(['BootNotification'])],
+    [1, new Set(['Authorize'])],
+    [2, new Set(['StartTransaction', 'StopTransaction', 'MeterValues',
+                 'RemoteStartTransaction', 'RemoteStopTransaction'])],
+    [3, new Set(['GetConfiguration', 'ChangeConfiguration', 'ClearCache',
+                 'Reset', 'TriggerMessage', 'GetLocalListVersion',
+                 'SendLocalList', 'SetChargingProfile', 'ClearChargingProfile',
+                 'GetCompositeSchedule', 'UnlockConnector', 'ChangeAvailability'])],
+    [4, new Set(['GetDiagnostics', 'UpdateFirmware',
+                 'DiagnosticsStatusNotification', 'FirmwareStatusNotification'])],
+  ];
+  const PHASE_LABELS = ['Verbindungsaufbau', 'Autorisierung', 'Ladevorgang',
+                        'Konfiguration', 'Diagnose & Firmware'];
+  const result = new Array(messages.length).fill(null);
+  let cur = -1;
+  for (let i = 0; i < messages.length; i++) {
+    const action = messages[i].action;
+    if (!action) continue;
+    for (const [idx, set] of PHASES) {
+      if (set.has(action) && idx !== cur) {
+        result[i] = PHASE_LABELS[idx];
+        cur = idx;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 function renderSequenceDiagram(messages, errors, warnings) {
   const container = document.getElementById('tab-sequence');
   if (!container) return;
 
   if (!messages || messages.length === 0) {
-    container.innerHTML = '<div class="empty-state"><p class="empty-title">Keine Nachrichten</p><p class="empty-sub">Keine OCPP-Nachrichten gefunden</p></div>';
+    container.innerHTML = `<div class="empty-state">
+      <svg class="empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+        <line x1="5" y1="3" x2="5" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/>
+        <line x1="5" y1="10" x2="19" y2="10"/><line x1="5" y1="16" x2="19" y2="16"/>
+      </svg>
+      <p class="empty-title">Kein Ablauf-Diagramm</p>
+      <p class="empty-sub">Parse den Log um den OCPP-Kommunikationsfluss zu sehen</p>
+    </div>`;
     return;
   }
 
   const errorLines   = new Set((errors   || []).map(e => e.line));
   const warningLines = new Set((warnings || []).map(w => w.line));
 
-  let rows = '';
+  // Pre-compute response times: uniqueId → rtt ms
+  const callTs  = {};
+  const rttMap  = {};
+  for (const msg of messages) {
+    if (msg.type === 'CALL' && msg.timestamp)
+      callTs[msg.uniqueId] = new Date(msg.timestamp).getTime();
+    else if ((msg.type === 'CALLRESULT' || msg.type === 'CALLERROR') && msg.timestamp) {
+      const t0 = callTs[msg.uniqueId];
+      if (t0) {
+        const rtt = new Date(msg.timestamp).getTime() - t0;
+        if (rtt >= 0 && rtt < 30_000) rttMap[msg.uniqueId] = rtt;
+      }
+    }
+  }
+
+  const phases = detectPhases(messages);
+  let bodyHtml = '';
+  let prevTsMs = null;
+
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
+
+    // ── Phase separator ──────────────────────────────────
+    if (phases[i]) {
+      bodyHtml += `<div class="sdg-row sdg-phase-row">
+        <span class="sdg-ts"></span>
+        <div class="sdg-stage">
+          <div class="sdg-phase-banner">
+            <span class="sdg-phase-label">${escapeHtml(phases[i])}</span>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ── Message classification ────────────────────────────
     const isSend = msg.direction === 'SEND' ||
       (msg.direction == null && CS_INITIATED.has(msg.action));
-
     const isError = errorLines.has(msg.line) || msg.type === 'CALLERROR';
     const isWarn  = !isError && warningLines.has(msg.line);
-    const cls = isError ? 'seq-error' : isWarn ? 'seq-warn' : 'seq-ok';
+    const cls     = isError ? 'sdg-error' : isWarn ? 'sdg-warn' : 'sdg-ok';
 
-    let label;
-    if      (msg.type === 'CALL')       label = msg.action || 'CALL';
-    else if (msg.type === 'CALLRESULT') label = `↩ ${msg.action || 'Response'}`;
-    else                                label = `✗ ${msg.action || msg.type}`;
+    // ── Chips ─────────────────────────────────────────────
+    let chipCls, chipTxt;
+    if      (msg.type === 'CALLERROR')  { chipCls = 'sdg-chip-err';  chipTxt = 'ERR';  }
+    else if (msg.type === 'CALLRESULT') { chipCls = 'sdg-chip-res';  chipTxt = 'RESP'; }
+    else                                { chipCls = 'sdg-chip-call'; chipTxt = 'CALL'; }
 
-    const ts = formatTime(msg.timestamp);
+    // ── Label ─────────────────────────────────────────────
+    const label = msg.action || msg.type;
 
-    rows += `<div class="seq-row ${isSend ? 'seq-send' : 'seq-recv'} ${cls}" data-idx="${i}">
-      <span class="seq-ts">${escapeHtml(ts)}</span>
-      <div class="seq-arrow-wrap">
-        <span class="seq-action">${escapeHtml(label)}</span>
-        <div class="seq-line"></div>
+    // ── Timestamp & delta ─────────────────────────────────
+    const ts   = formatTime(msg.timestamp);
+    const curMs = msg.timestamp ? new Date(msg.timestamp).getTime() : null;
+    let deltaHtml = '';
+    if (prevTsMs !== null && curMs !== null) {
+      const d = curMs - prevTsMs;
+      if (d >= 0 && d < 300_000) {
+        const dStr = d < 1000 ? `+${d}ms` : `+${(d / 1000).toFixed(1)}s`;
+        deltaHtml = `<span class="sdg-ts-delta">${escapeHtml(dStr)}</span>`;
+      }
+    }
+    if (curMs !== null) prevTsMs = curMs;
+
+    // ── RTT for responses ──────────────────────────────────
+    let rttHtml = '';
+    if (rttMap[msg.uniqueId] != null) {
+      const rtt    = rttMap[msg.uniqueId];
+      const rttStr = rtt < 1000 ? `${rtt}ms` : `${(rtt / 1000).toFixed(2)}s`;
+      rttHtml = `<span class="sdg-rtt">${escapeHtml(rttStr)}</span>`;
+    }
+
+    const errRow = isError ? ' sdg-row-error' : '';
+
+    bodyHtml += `<div class="sdg-row sdg-msg-row ${isSend ? 'sdg-send' : 'sdg-recv'} ${cls}${errRow}" data-idx="${i}" data-line="${msg.line}">
+      <span class="sdg-ts">
+        <span class="sdg-ts-time">${escapeHtml(ts)}</span>
+        ${deltaHtml}
+      </span>
+      <div class="sdg-stage">
+        <div class="sdg-arrow">
+          <div class="sdg-arrow-meta">
+            <span class="sdg-chip ${chipCls}">${chipTxt}</span>
+            <span class="sdg-label">${escapeHtml(label)}</span>
+            ${rttHtml}
+          </div>
+          <div class="sdg-arrow-line"></div>
+        </div>
       </div>
     </div>`;
   }
 
+  // ── Count badges ──────────────────────────────────────────
+  const errBadge  = errors.length
+    ? `<span class="sdg-err-badge">${errors.length} Fehler</span>` : '';
+  const warnBadge = warnings.length
+    ? `<span class="sdg-warn-badge">${warnings.length} Warnungen</span>` : '';
+
   container.innerHTML = `
-    <div class="seq-diagram">
-      <div class="seq-actors-bar">
-        <div class="seq-actors-inner">
-          <span class="seq-ts-head"></span>
-          <div class="seq-actor-cs"><div class="seq-actor-box">⚡ Ladestation</div></div>
-          <div class="seq-actor-be"><div class="seq-actor-box">🖥 Backend</div></div>
+    <div class="sdg">
+
+      <div class="sdg-head">
+        <div class="sdg-actors-row">
+          <span class="sdg-ts-spacer"></span>
+          <div class="sdg-actors-stage">
+            <div class="sdg-actor-col sdg-actor-cs">
+              <div class="sdg-actor-card">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="7" width="20" height="14" rx="2"/>
+                  <path d="M16 7V5a2 2 0 0 0-4 0v2"/>
+                  <path d="M8 7V5a2 2 0 0 1 4 0"/>
+                </svg>
+                Ladestation
+              </div>
+            </div>
+            <div class="sdg-actor-col sdg-actor-be">
+              <div class="sdg-actor-card">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                Backend
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sdg-head-meta">
+          <span class="sdg-count-badge">${messages.length} Nachrichten</span>
+          ${errBadge}${warnBadge}
+          <span class="sdg-head-hint">Klick auf Nachricht → Details</span>
         </div>
       </div>
-      <div class="seq-body">${rows}</div>
-      <div id="seqDetail" class="seq-detail hidden"></div>
+
+      <div class="sdg-body">${bodyHtml}</div>
+
+      <div id="sdgDetail" class="sdg-detail hidden"></div>
     </div>`;
 
-  container.querySelectorAll('.seq-row').forEach(el => {
+  // ── Click handlers ────────────────────────────────────────
+  const detailEl = container.querySelector('#sdgDetail');
+  container.querySelector('.sdg-detail-close-btn')?.addEventListener('click', () => {
+    detailEl.classList.add('hidden');
+    container.querySelectorAll('.sdg-selected').forEach(r => r.classList.remove('sdg-selected'));
+  });
+
+  container.querySelectorAll('.sdg-msg-row').forEach(el => {
     el.addEventListener('click', () => {
-      const msg = messages[parseInt(el.dataset.idx, 10)];
-      showSeqDetail(msg, container.querySelector('#seqDetail'), el);
+      const i   = parseInt(el.dataset.idx, 10);
+      const was = el.classList.contains('sdg-selected');
+      container.querySelectorAll('.sdg-selected').forEach(r => r.classList.remove('sdg-selected'));
+      if (was) {
+        detailEl.classList.add('hidden');
+      } else {
+        el.classList.add('sdg-selected');
+        showSeqDetail(messages[i], detailEl, container);
+      }
     });
   });
 }
 
-function showSeqDetail(msg, detailEl, rowEl) {
-  if (!detailEl.classList.contains('hidden') && detailEl._seqLine === msg.line) {
-    detailEl.classList.add('hidden');
-    return;
-  }
-  detailEl._seqLine = msg.line;
-
+function showSeqDetail(msg, detailEl, container) {
   let payloadStr = '';
   if (msg.type === 'CALLERROR') {
     payloadStr = JSON.stringify({
       errorCode:        msg.errorCode,
       errorDescription: msg.errorDescription,
-      errorDetails:     msg.errorDetails,
+      errorDetails:     msg.errorDetails || {},
     }, null, 2);
   } else if (msg.payload && Object.keys(msg.payload).length > 0) {
     payloadStr = JSON.stringify(msg.payload, null, 2);
   }
 
-  const dirLabel = msg.direction === 'SEND'
-    ? 'Ladestation → Backend'
-    : msg.direction === 'RECV'
-      ? 'Backend → Ladestation'
-      : '';
+  const isSend = msg.direction === 'SEND';
+  const isRecv = msg.direction === 'RECV';
+  const dirArrow = isSend ? '→' : isRecv ? '←' : '↔';
+  const dirLabel = isSend ? 'Ladestation → Backend'
+                 : isRecv ? 'Backend → Ladestation'
+                 : 'Unbekannte Richtung';
+
+  const isError = msg.type === 'CALLERROR';
+  const desc    = OCPP_DESCRIPTIONS[msg.action] || '';
+
+  let chipCls, chipTxt;
+  if      (isError)                { chipCls = 'sdg-chip-err';  chipTxt = 'CALLERROR';  }
+  else if (msg.type === 'CALLRESULT') { chipCls = 'sdg-chip-res'; chipTxt = 'CALLRESULT'; }
+  else                             { chipCls = 'sdg-chip-call'; chipTxt = 'CALL';       }
 
   detailEl.innerHTML = `
-    <div class="seq-detail-header">
-      <span class="seq-detail-action">${escapeHtml(msg.action || msg.type)}</span>
-      <span class="seq-detail-type">${escapeHtml(msg.type)}</span>
-      ${dirLabel ? `<span class="seq-detail-dir">${escapeHtml(dirLabel)}</span>` : ''}
-      <span class="seq-detail-ts">${escapeHtml(formatTimestamp(msg.timestamp))}</span>
-      <span class="seq-detail-line">Zeile ${msg.line}</span>
-      <button class="seq-detail-close" onclick="this.closest('.seq-detail').classList.add('hidden')">✕</button>
+    <div class="sdg-detail-head">
+      <div class="sdg-detail-title">
+        <span class="sdg-detail-action${isError ? ' sdg-detail-action-err' : ''}">${escapeHtml(msg.action || msg.type)}</span>
+        <span class="sdg-detail-dir-label">${dirArrow} ${escapeHtml(dirLabel)}</span>
+      </div>
+      <div class="sdg-detail-chips">
+        <span class="sdg-chip ${chipCls}">${chipTxt}</span>
+        ${msg.timestamp ? `<span class="sdg-detail-meta-chip">${escapeHtml(formatTimestamp(msg.timestamp))}</span>` : ''}
+        <span class="sdg-detail-meta-chip">Zeile ${msg.line}</span>
+      </div>
+      <button class="sdg-detail-close-btn" title="Schließen">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
+    ${desc ? `<div class="sdg-detail-desc">${escapeHtml(desc)}</div>` : ''}
     ${payloadStr
-      ? `<pre class="seq-detail-payload">${escapeHtml(payloadStr)}</pre>`
-      : '<div class="seq-detail-empty">Kein Payload</div>'}`;
+      ? `<pre class="sdg-detail-payload">${escapeHtml(payloadStr)}</pre>`
+      : '<div class="sdg-detail-empty">Kein Payload</div>'}`;
+
+  // Wire close button
+  detailEl.querySelector('.sdg-detail-close-btn').addEventListener('click', () => {
+    detailEl.classList.add('hidden');
+    container.querySelectorAll('.sdg-selected').forEach(r => r.classList.remove('sdg-selected'));
+  });
 
   detailEl.classList.remove('hidden');
-
-  // Scroll detail into view
-  setTimeout(() => detailEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+  setTimeout(() => detailEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30);
 }
 
 // ============================================================

@@ -2008,252 +2008,462 @@ details[open] .issue-chevron { transform: rotate(45deg); margin-top: 0; margin-b
 }
 
 /* ================================================================
-   SEQUENCE DIAGRAM (Phase 1)
+   SEQUENCE DIAGRAM – Premium  (.sdg-*)
    ================================================================ */
 
-.seq-diagram {
+/* ── Shell ───────────────────────────────────────────────────── */
+.sdg {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--bg);
 }
 
-/* Actor header bar */
-.seq-actors-bar {
+/* ── Head: actors + meta bar ─────────────────────────────────── */
+.sdg-head {
   flex-shrink: 0;
-  border-bottom: 1px solid var(--line);
   background: var(--surface);
-  padding: 8px 12px 6px;
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  border-bottom: 1px solid var(--line);
 }
 
-.seq-actors-inner {
+/* Row that aligns actor boxes with the stage column */
+.sdg-actors-row {
   display: grid;
-  grid-template-columns: 72px 1fr 1fr;
+  grid-template-columns: 72px 1fr;
+  padding: 12px 0 10px;
+}
+.sdg-ts-spacer { /* gutter placeholder */ }
+
+/* Stage inside actor row — actor boxes pinned at 25 % / 75 % */
+.sdg-actors-stage {
+  position: relative;
+  height: 40px;
+}
+.sdg-actor-col {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+.sdg-actor-cs { left: 25%; }
+.sdg-actor-be { left: 75%; }
+
+.sdg-actor-card {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-
-.seq-ts-head { display: block; width: 72px; }
-
-.seq-actor-cs,
-.seq-actor-be {
-  display: flex;
-  justify-content: center;
-}
-
-.seq-actor-box {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  gap: 6px;
+  padding: 6px 16px;
   border-radius: var(--r);
-  padding: 5px 14px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid;
+  letter-spacing: 0.01em;
+}
+.sdg-actor-cs .sdg-actor-card {
+  background: var(--blue-dim);
+  border-color: var(--blue-border);
+  color: var(--blue);
+}
+.sdg-actor-be .sdg-actor-card {
+  background: var(--panel);
+  border-color: var(--line-strong);
   color: var(--ink-2);
+}
+
+/* Meta / stats strip */
+.sdg-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.sdg-count-badge {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.sdg-err-badge {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+  border-radius: 20px;
+  padding: 1px 9px;
+}
+.sdg-warn-badge {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--amber-dim);
+  color: var(--amber);
+  border: 1px solid var(--amber-border);
+  border-radius: 20px;
+  padding: 1px 9px;
+}
+.sdg-head-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--ink-4);
+  font-style: italic;
+}
+
+/* ── Scrollable body ─────────────────────────────────────────── */
+.sdg-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 20px;
+}
+
+/* ── Universal row grid ──────────────────────────────────────── */
+/* All rows: [72px timestamp gutter] [1fr stage] */
+.sdg-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  min-height: 50px;
+  align-items: stretch;
+}
+
+/* ── Timestamp column ────────────────────────────────────────── */
+.sdg-ts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 10px 0 0;
+  gap: 2px;
+}
+.sdg-ts-time {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.sdg-ts-delta {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  color: var(--ink-5);
   white-space: nowrap;
 }
 
-/* Scrollable message body */
-.seq-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px 12px 12px;
+/* ── Stage: lifelines live here ──────────────────────────────── */
+.sdg-stage {
   position: relative;
+  min-height: 50px;
 }
 
-/* Lifelines (dashed vertical lines) */
-.seq-body::before,
-.seq-body::after {
+/* CS lifeline at 25 % of stage */
+.sdg-stage::before {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
+  top: 0; bottom: 0;
+  left: 25%;
+  width: 1px;
   background: repeating-linear-gradient(
     to bottom,
-    var(--line-strong) 0px, var(--line-strong) 5px,
+    var(--line-strong) 0, var(--line-strong) 5px,
     transparent 5px, transparent 11px
   );
   pointer-events: none;
   z-index: 0;
 }
-/* CS lifeline: left quarter */
-.seq-body::before { left: calc(72px + 12px + (100% - 72px - 24px) * 0.25); }
-/* BE lifeline: right quarter */
-.seq-body::after  { right: calc(12px + (100% - 72px - 24px) * 0.25); }
+/* BE lifeline at 75 % of stage */
+.sdg-stage::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 75%;
+  width: 1px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--line-strong) 0, var(--line-strong) 5px,
+    transparent 5px, transparent 11px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
 
-/* Message rows */
-.seq-row {
-  display: grid;
-  grid-template-columns: 72px 1fr;
+/* ── Phase separator row ─────────────────────────────────────── */
+.sdg-phase-row {
+  min-height: 36px;
+}
+.sdg-phase-row .sdg-stage {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 0;
-  cursor: pointer;
-  border-radius: var(--r);
-  transition: background var(--t);
-  position: relative;
-  z-index: 1;
+  min-height: 36px;
 }
-.seq-row:hover { background: var(--panel); }
-
-.seq-ts {
-  font-size: 10.5px;
-  font-family: var(--mono);
-  color: var(--ink-3);
-  text-align: right;
-  padding-right: 6px;
+.sdg-phase-banner {
+  position: absolute;
+  /* span between the two lifelines */
+  left: 25%;
+  right: 25%;
+  display: flex;
+  align-items: center;
+  z-index: 2;
+}
+.sdg-phase-banner::before,
+.sdg-phase-banner::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.sdg-phase-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
   white-space: nowrap;
+  padding: 2px 9px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  margin: 0 8px;
 }
 
-/* Arrow container */
-.seq-arrow-wrap {
+/* ── Message rows ────────────────────────────────────────────── */
+.sdg-msg-row {
+  cursor: pointer;
+  transition: background 80ms var(--ease);
+}
+.sdg-msg-row:hover             { background: var(--panel); }
+.sdg-msg-row.sdg-selected      { background: rgba(26,86,219,0.06); }
+.sdg-msg-row.sdg-row-error     { background: rgba(217,48,37,0.04); }
+.sdg-msg-row.sdg-row-error:hover     { background: rgba(217,48,37,0.09); }
+.sdg-msg-row.sdg-row-error.sdg-selected { background: rgba(26,86,219,0.06); }
+
+/* left-edge selection accent */
+.sdg-msg-row.sdg-selected::before {
+  content: none; /* stage ::before is the lifeline – don't interfere */
+}
+.sdg-msg-row.sdg-selected .sdg-ts {
+  border-right: 2px solid var(--blue);
+}
+
+/* ── Arrow: positioned between the two lifelines ─────────────── */
+/* Spans exactly left:25% to right:25% (= 75% from left) of stage */
+.sdg-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 25%;
+  right: 25%;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 
-/* Action label */
-.seq-action {
-  font-size: 11.5px;
-  font-weight: 500;
+/* Meta row: chip + label + RTT */
+.sdg-arrow-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   padding: 0 4px;
+  min-width: 0;
+}
+/* SEND: chip left, label middle, RTT right */
+.sdg-send .sdg-arrow-meta { flex-direction: row; }
+/* RECV: RTT left, label middle, chip right */
+.sdg-recv .sdg-arrow-meta { flex-direction: row-reverse; }
+
+/* ── Type chip ───────────────────────────────────────────────── */
+.sdg-chip {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid;
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+.sdg-chip-call { background: var(--blue-dim);  color: var(--blue);  border-color: var(--blue-border); }
+.sdg-chip-res  { background: var(--green-dim); color: var(--green); border-color: var(--green-border); }
+.sdg-chip-err  { background: var(--red-dim);   color: var(--red);   border-color: var(--red-border); }
+
+/* ── Action label ────────────────────────────────────────────── */
+.sdg-label {
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  flex: 1;
+  min-width: 0;
 }
-.seq-send .seq-action { align-self: flex-start; }
-.seq-recv .seq-action { align-self: flex-end;   }
+.sdg-ok    .sdg-label { color: var(--ink); }
+.sdg-warn  .sdg-label { color: var(--amber); font-weight: 600; }
+.sdg-error .sdg-label { color: var(--red);   font-weight: 600; }
 
-/* Horizontal line + arrowhead */
-.seq-line {
-  height: 14px;
-  position: relative;
+/* RTT */
+.sdg-rtt {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  color: var(--ink-4);
+  flex-shrink: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 4px;
 }
-.seq-line::before {
+
+/* ── Horizontal arrow line ───────────────────────────────────── */
+.sdg-arrow-line {
+  width: 100%;
+  height: 10px;
+  position: relative;
+  flex-shrink: 0;
+}
+/* The line itself */
+.sdg-arrow-line::before {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 0; right: 0;
+  top: 50%; left: 0; right: 0;
   height: 1.5px;
+  transform: translateY(-50%);
+  border-radius: 1px;
 }
-.seq-line::after {
+.sdg-ok    .sdg-arrow-line::before { background: var(--green); opacity: 0.75; }
+.sdg-warn  .sdg-arrow-line::before { background: var(--amber); opacity: 0.70; }
+.sdg-error .sdg-arrow-line::before { background: var(--red); }
+
+/* Arrowhead */
+.sdg-arrow-line::after {
   content: '';
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
+  border-top:    4px solid transparent;
+  border-bottom: 4px solid transparent;
 }
+/* SEND → right */
+.sdg-send .sdg-arrow-line::after { right: 0; border-left-width: 7px; border-left-style: solid; }
+/* RECV ← left */
+.sdg-recv .sdg-arrow-line::after { left:  0; border-right-width: 7px; border-right-style: solid; }
 
-/* SEND: arrow points right */
-.seq-send .seq-line::after {
-  right: 0;
-  border-left-width: 8px;
-  border-left-style: solid;
+.sdg-ok.sdg-send    .sdg-arrow-line::after { border-left-color:  var(--green); }
+.sdg-ok.sdg-recv    .sdg-arrow-line::after { border-right-color: var(--green); }
+.sdg-warn.sdg-send  .sdg-arrow-line::after { border-left-color:  var(--amber); }
+.sdg-warn.sdg-recv  .sdg-arrow-line::after { border-right-color: var(--amber); }
+.sdg-error.sdg-send .sdg-arrow-line::after { border-left-color:  var(--red); }
+.sdg-error.sdg-recv .sdg-arrow-line::after { border-right-color: var(--red); }
+
+/* ── Small node dot at arrow origin ──────────────────────────── */
+/* Placed on the lifeline side at the arrow's starting point      */
+.sdg-arrow::before {
+  content: '';
+  position: absolute;
+  top: calc(100% - 6px); /* vertically at the arrow line */
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  background: var(--surface);
+  transform: translateX(-50%) translateY(50%);
+  z-index: 3;
 }
-/* RECV: arrow points left */
-.seq-recv .seq-line::after {
-  left: 0;
-  border-right-width: 8px;
-  border-right-style: solid;
-}
+.sdg-send .sdg-arrow::before { left: 0; }   /* CS side */
+.sdg-recv .sdg-arrow::before { left: 100%; } /* BE side */
 
-/* Color themes */
-/* Color themes – applied to .seq-row */
-.seq-ok   .seq-line::before  { background: var(--green); }
-.seq-warn .seq-line::before  { background: var(--amber); }
-.seq-error .seq-line::before { background: var(--red);   }
+.sdg-ok.sdg-send    .sdg-arrow::before,
+.sdg-ok.sdg-recv    .sdg-arrow::before { border-color: var(--green); }
+.sdg-warn.sdg-send  .sdg-arrow::before,
+.sdg-warn.sdg-recv  .sdg-arrow::before { border-color: var(--amber); }
+.sdg-error.sdg-send .sdg-arrow::before,
+.sdg-error.sdg-recv .sdg-arrow::before { border-color: var(--red); }
 
-/* SEND arrowheads (right) */
-.seq-ok.seq-send   .seq-line::after { border-left-color: var(--green); }
-.seq-warn.seq-send .seq-line::after { border-left-color: var(--amber); }
-.seq-error.seq-send .seq-line::after { border-left-color: var(--red);  }
-
-/* RECV arrowheads (left) */
-.seq-ok.seq-recv   .seq-line::after { border-right-color: var(--green); }
-.seq-warn.seq-recv .seq-line::after { border-right-color: var(--amber); }
-.seq-error.seq-recv .seq-line::after { border-right-color: var(--red);  }
-
-/* Action label colors */
-.seq-ok   .seq-action  { color: var(--ink);   }
-.seq-warn .seq-action  { color: var(--amber); font-weight: 600; }
-.seq-error .seq-action { color: var(--red);   font-weight: 600; }
-
-/* Detail panel */
-.seq-detail {
-  border-top: 1px solid var(--line);
-  background: var(--panel);
+/* ── Detail panel ────────────────────────────────────────────── */
+.sdg-detail {
   flex-shrink: 0;
-  max-height: 220px;
+  border-top: 2px solid var(--line);
+  background: var(--surface);
+  max-height: 270px;
   overflow-y: auto;
 }
-.seq-detail-header {
+.sdg-detail-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.sdg-detail-title {
+  grid-column: 1;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 3px;
+}
+.sdg-detail-chips {
+  grid-column: 1;
+  display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
+  gap: 5px;
+  padding-top: 4px;
 }
-.seq-detail-action {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--ink);
-}
-.seq-detail-type {
-  font-size: 11px;
-  font-family: var(--mono);
-  background: var(--panel-2);
-  border-radius: 4px;
-  padding: 1px 6px;
-  color: var(--ink-2);
-}
-.seq-detail-dir {
-  font-size: 11px;
-  color: var(--blue);
-  background: var(--blue-dim);
-  border-radius: 4px;
-  padding: 1px 7px;
-}
-.seq-detail-ts {
-  font-size: 11px;
-  color: var(--ink-3);
-  font-family: var(--mono);
-}
-.seq-detail-line {
-  font-size: 11px;
-  color: var(--ink-3);
-  margin-left: auto;
-}
-.seq-detail-close {
+.sdg-detail-close-btn {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: start;
   border: none;
   background: none;
   cursor: pointer;
   color: var(--ink-3);
-  font-size: 14px;
-  padding: 2px 5px;
+  padding: 4px 5px;
   border-radius: var(--r);
   line-height: 1;
-  flex-shrink: 0;
+  transition: background var(--t), color var(--t);
 }
-.seq-detail-close:hover { background: var(--panel-2); color: var(--ink); }
-.seq-detail-payload {
-  padding: 10px 12px;
+.sdg-detail-close-btn:hover { background: var(--panel-2); color: var(--ink); }
+
+.sdg-detail-action {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.sdg-detail-action-err { color: var(--red); }
+.sdg-detail-dir-label {
+  font-size: 12px;
+  color: var(--blue);
+  font-weight: 500;
+}
+.sdg-detail-meta-chip {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink-3);
+}
+.sdg-detail-desc {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--panel);
+  font-style: italic;
+}
+.sdg-detail-payload {
+  padding: 12px 14px;
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--ink-2);
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
+  line-height: 1.6;
 }
-.seq-detail-empty {
-  padding: 10px 12px;
+.sdg-detail-empty {
+  padding: 12px 14px;
   color: var(--ink-3);
   font-size: 12px;
+  font-style: italic;
 }
 
 /* ================================================================
